@@ -93,6 +93,10 @@ contract Vault is Ownable {
     // Premium collected per strike for an epoch
     // mapping (epoch => (strike => premium))
     mapping(uint256 => mapping(uint256 => uint256)) public totalEpochPremium;
+    // Total dpx tokens that were sent back to the buyer when a
+    // vault is exercised
+    // mapping (epoch => amount)
+    mapping(uint256 => uint256) public totalTokenVaultExercises;
 
     // Price Oracle Aggregator
     /// @dev getPriceInUSD(address _token)
@@ -278,7 +282,56 @@ contract Vault is Ownable {
         emit LogNewPurchase(epoch, strike, msg.sender, amount, premium);
     }
 
-    function exercise() public {}
+    /**
+     * Exercise calculates the PnL for the user. Withdraw the PnL in DPX from the SSF and transfer it to the user. Will also the burn the doTokens from the user.
+     * @param epoch Target epoch
+     * @param strikeIndex Strike index for current epoch
+     * @param amount Amount of calls to purchase
+     * @param user Address of the user
+     * @return Whether vault was exercised
+     */
+    function exercise(
+        uint256 epoch,
+        uint256 strikeIndex,
+        uint256 amount,
+        address user
+    ) public returns (bool) {
+        uint256 strike = epochStrikes[epoch + 1][strikeIndex];
+        uint256 currentPrice = getUsdPrice(address(dpx));
+
+        // Revert if strike price is higher than current price
+        require(strike < currentPrice, "Strike is higher than current price");
+
+        // Revert if user is zero address
+        require(user != address(0), "Invalid user address");
+
+        // Rever if amount is zero
+        require(amount > 0, "Invalid amount");
+
+        // Revert if user does not have enough option token balance for the amount specified
+        require(
+            IERC20(epochStrikeTokens[epoch][strike]).balanceOf(user) >= amount,
+            "Option token balance is not enough"
+        );
+
+        // Calculate PnL
+        uint256 PnL = ((currentPrice - strike) * amount) / strike;
+
+        // Burn user option tokens
+        IERC20(epochStrikeTokens[epoch][strike]).safeTransferFrom(
+            user,
+            address(0),
+            amount
+        );
+
+        // Update state to account for exercised options (amount of DPX used in exercising)
+        totalTokenVaultExercises[epoch] += PnL;
+
+        // Transfer PnL to user
+        dpx.safeTransfer(user, PnL);
+
+        return true;
+    }
 
     /**
      * Allows anyone to call compound()
