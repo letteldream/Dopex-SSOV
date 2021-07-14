@@ -315,7 +315,7 @@ contract Vault is Ownable {
         );
 
         // Calculate PnL
-        uint256 PnL = ((currentPrice - strike) * amount) / currentPrice;
+        uint256 PnL = ((currentPrice - strike) * amount) / strike;
 
         // Burn user option tokens
         IERC20(epochStrikeTokens[epoch][strike]).safeTransferFrom(
