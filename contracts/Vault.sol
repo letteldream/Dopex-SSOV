@@ -315,7 +315,7 @@ contract Vault is Ownable {
         );
 
         // Calculate PnL
-        uint256 PnL = ((currentPrice - strike) * amount) / strike;
+        uint256 PnL = ((currentPrice - strike) * amount) / currentPrice;
 
         // Burn user option tokens
         IERC20(epochStrikeTokens[epoch][strike]).safeTransferFrom(
@@ -367,22 +367,33 @@ contract Vault is Ownable {
         public
         returns (bool)
     {
+        // Must be a past epoch
         require(
             withdrawEpoch < epoch && epoch == getCurrentMonthlyEpoch(),
             "Withdraw epoch must be in the past"
         );
+
+        // Must be a valid strike
+        uint256 strike = epochStrikes[withdrawEpoch][strikeIndex];
+        require(strike != 0, "Invalid strike");
+
+        // Must be a valid user strike deposit amount
+        bytes32 userStrike = abi.encodePacked(msg.sender, strike);
+        uint256 userStrikeDeposits = userEpochDeposits[withdrawEpoch][
+            userStrike
+        ];
         require(
-            epochStrikes[withdrawEpoch][strikeIndex] != 0,
-            "Invalid strike"
+            userStrikeDeposits > 0,
+            "User strike deposit amount must be greater than zero"
         );
 
-        uint256 strike = epochStrikes[withdrawEpoch][strikeIndex];
-        uint256 userStrikeDeposits = userEpochDeposits[withdrawEpoch][
-            abi.encodePacked(msg.sender, strike)
-        ];
-        uint256 totalStrikeDeposits = totalEpochStrikeDeposits[withdrawEpoch][
-            strike
-        ];
+        // Transfer DPX tokens to user
+        userEpochDeposits[withdrawEpoch][userStrike] = 0;
+        totalEpochStrikeDeposits[withdrawEpoch][strike] -= userStrikeDeposits;
+
+        dpx.transfer(msg.sender, userStrikeDeposits);
+
+        return true;
     }
 
     /**
