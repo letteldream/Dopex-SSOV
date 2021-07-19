@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 import "../math/PRBMathSD59x18.sol";
 import "../../interfaces/IPriceOracleAggregator.sol";
 
@@ -214,11 +212,11 @@ contract UniswapV2Oracle is IOracle {
 
         if (isFirstToken) {
             price =
-                (price0Average * aggregator.getPriceInUSD(IERC20(token1))) /
+                (price0Average * aggregator.getPriceInUSD(token1)) /
                 (10**(pair.decimals() + 18));
         } else {
             price =
-                (price1Average * aggregator.getPriceInUSD(IERC20(token0))) /
+                (price1Average * aggregator.getPriceInUSD(token0)) /
                 (10**(pair.decimals() + 18));
         }
         latestAnswer = price;
