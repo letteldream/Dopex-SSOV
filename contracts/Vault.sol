@@ -33,21 +33,22 @@ pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
 
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
-import {SafeERC20} from "../libraries/SafeERC20.sol";
-
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20PresetMinterPauser} from "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import {BokkyPooBahsDateTimeLibrary} from "./libraries/BokkyPooBahsDateTimeLibrary.sol";
+import {SafeERC20} from "./libraries/SafeERC20.sol";
 
-import "./IStakingRewards.sol";
-import "./IOptionPricing.sol";
+import "./interfaces/IERC20.sol";
+import "./interfaces/IStakingRewards.sol";
+import "./interfaces/IOptionPricing.sol";
 import "./interfaces/IPriceOracleAggregator.sol";
 
 contract Vault is Ownable {
     using BokkyPooBahsDateTimeLibrary for uint256;
-
+    using Strings for uint256;
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -171,16 +172,17 @@ contract Vault is Ownable {
         }
         for (uint256 i = 0; i < epochStrikes[epoch + 1].length; i++) {
             uint256 strike = epochStrikes[epoch + 1][i];
-            string memory name = concatenate("DPX-CALL", strike);
-            name = concatenate(token, "-EPOCH-");
-            name = concatenate(token, epoch + 1);
+            string memory name = concatenate("DPX-CALL", strike.toString());
+            name = concatenate(name, "-EPOCH-");
+            name = concatenate(name, (epoch + 1).toString());
             // Create doTokens representing calls for selected strike in epoch
-            epochStrikeTokens[epoch + 1][strike] = new ERC20PresetMinterPauser(
+            ERC20PresetMinterPauser _erc20 = new ERC20PresetMinterPauser(
                 name,
                 name
             );
+            epochStrikeTokens[epoch + 1][strike] = address(_erc20);
             // Mint tokens equivalent to deposits for strike in epoch
-            IERC20(epochStrikeTokens[epoch + 1][strike]).mint(
+            _erc20.mint(
                 address(this),
                 totalEpochStrikeDeposits[epoch + 1][strike]
             );
@@ -195,16 +197,20 @@ contract Vault is Ownable {
      * @param strikes Strikes to set for next epoch
      * @return Whether strikes were set
      */
-    function setStrikes(uint256[] strikes) public onlyOwner returns (bool) {
+    function setStrikes(uint256[] memory strikes)
+        public
+        onlyOwner
+        returns (bool)
+    {
         epochStrikes[epoch + 1] = strikes;
         for (uint256 i = 0; i < strikes.length; i++)
-            emit LogNewStrike(epoch + 1, strike[i]);
+            emit LogNewStrike(epoch + 1, strikes[i]);
         return true;
     }
 
     /**
      * Deposits dpx into vaults to mint options in the next epoch for selected strikes
-     * @param strike Strike price
+     * @param strikeIndex Index of strike
      * @param amount Amout of DPX to deposit
      * @return Whether deposit was successful
      */
@@ -215,7 +221,7 @@ contract Vault is Ownable {
         uint256 strike = epochStrikes[epoch + 1][strikeIndex];
         // Must be a valid strike
         require(strike != 0, "Invalid strike");
-        bytes32 userStrike = abi.encodePacked(msg.sender, strike);
+        bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
         // Add to user epoch deposits
         userEpochDeposits[epoch + 1][userStrike] += amount;
         // Add to total epoch strike deposits
@@ -236,10 +242,10 @@ contract Vault is Ownable {
      * @param amounts Amount of DPX to deposit into each strike index
      * @return Whether deposits went through successfully
      */
-    function depositMultiple(uint256[] strikeIndices, uint256[] amounts)
-        public
-        returns (bool)
-    {
+    function depositMultiple(
+        uint256[] memory strikeIndices,
+        uint256[] memory amounts
+    ) public returns (bool) {
         for (uint256 i = 0; i < strikeIndices.length; i++)
             deposit(strikeIndices[i], amounts[i]);
         return true;
@@ -280,6 +286,8 @@ contract Vault is Ownable {
         // Transfer doTokens to user
         IERC20(epochStrikeTokens[epoch][strike]).transfer(msg.sender, amount);
         emit LogNewPurchase(epoch, strike, msg.sender, amount, premium);
+
+        return true;
     }
 
     /**
@@ -337,7 +345,7 @@ contract Vault is Ownable {
      * Allows anyone to call compound()
      * @return Whether compound was successful
      */
-    function compound() public {
+    function compound() public returns (bool) {
         // Must be bootstrapped
         require(
             getCurrentMonthlyEpoch() == epoch,
@@ -355,11 +363,13 @@ contract Vault is Ownable {
             oldBalance,
             totalEpochDpxBalance[epoch]
         );
+
+        return true;
     }
 
     /**
      * Withdraws balances for a strike in a completed epoch
-     * @param epoch Epoch to withdraw from
+     * @param withdrawEpoch Epoch to withdraw from
      * @param strikeIndex Index of strike
      * @return Whether withdraw was successful
      */
@@ -378,7 +388,7 @@ contract Vault is Ownable {
         require(strike != 0, "Invalid strike");
 
         // Must be a valid user strike deposit amount
-        bytes32 userStrike = abi.encodePacked(msg.sender, strike);
+        bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
         uint256 userStrikeDeposits = userEpochDeposits[withdrawEpoch][
             userStrike
         ];
@@ -494,7 +504,7 @@ contract Vault is Ownable {
      * @dev Epochs are 1-indexed
      * @return Current monthly epoch number
      */
-    function getCurrentMonthlyEpoch() external view returns (uint256) {
+    function getCurrentMonthlyEpoch() public view returns (uint256) {
         if (block.timestamp < epochInitTime) return 0;
         /**
          * Monthly Epoch = ((Current time - Init time) / 28 days) + 1
@@ -529,15 +539,15 @@ contract Vault is Ownable {
                         epochInitTime))) - epochInitTime) / (7 days)) + 1;
     }
 
-    function concatenate(string calldata a, string calldata b)
-        external
+    function concatenate(string memory a, string memory b)
+        public
         pure
         returns (string memory)
     {
         return string(abi.encodePacked(a, b));
     }
 
-    function getUsdPrice(address _token) public view returns (uint256) {
+    function getUsdPrice(address _token) public returns (uint256) {
         return priceOracleAggregator.getPriceInUSD(_token);
     }
 }
