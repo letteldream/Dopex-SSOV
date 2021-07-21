@@ -4,6 +4,8 @@ pragma solidity ^0.8.0;
 import "../math/PRBMathSD59x18.sol";
 import "../../interfaces/IPriceOracleAggregator.sol";
 
+import "hardhat/console.sol";
+
 interface IUniswapV2Pair {
     function token0() external view returns (address);
 
@@ -220,6 +222,9 @@ contract UniswapV2Oracle is IOracle {
                 (10**(pair.decimals() + 18));
         }
         latestAnswer = price;
+
+        console.log("++++++", price0Average, price1Average);
+
         emit PriceUpdated(isFirstToken ? token0 : token1, price);
     }
 

@@ -540,7 +540,7 @@ contract Vault is Ownable {
     }
 
     function concatenate(string memory a, string memory b)
-        public
+        internal
         pure
         returns (string memory)
     {
