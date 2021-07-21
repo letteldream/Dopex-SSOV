@@ -12,3 +12,8 @@ Users can lock in DPX into this Option Vault. Option Vault has a monthly expiry.
 - `exercise()` This will calculate the PnL for the user. Withdraw the PnL in DPX from the SSF and transfer it to the user. Will also the burn the doTokens from the user.
 - `compound()` Calls compound for the Option Vault in the single staking DPX farming contract. This will increment the total deposited DPX in the vault adding liquidity for all the strikes.
 - `withdraw()` Lets a user withdraw his share of DPX from the vault for an epoch. This will only work when the epoch has expired (meaning all options minted from the pool have either expired or been exercised). This will withdraw the users share from the SSF and return it to him.
+
+## For local network fork and test
+
+1. `npx hardhat node --fork https://eth-mainnet.alchemyapi.io/v2/********`
+2. `npx hardhat test --network localhost`
