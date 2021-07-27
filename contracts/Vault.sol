@@ -218,21 +218,32 @@ contract Vault is Ownable {
         public
         returns (bool)
     {
+        // Must be a valid strikeIndex
+        require(
+            strikeIndex < epochStrikes[epoch + 1].length,
+            "Invalid strike index"
+        );
+
         uint256 strike = epochStrikes[epoch + 1][strikeIndex];
+        bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
+
         // Must be a valid strike
         require(strike != 0, "Invalid strike");
-        bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
+
+        // Transfer DPX from user to vault
+        dpx.transferFrom(msg.sender, address(this), amount);
+
         // Add to user epoch deposits
         userEpochDeposits[epoch + 1][userStrike] += amount;
         // Add to total epoch strike deposits
         totalEpochStrikeDeposits[epoch + 1][strike] += amount;
         // Add to total epoch deposits
         totalEpochDeposits[epoch + 1] += amount;
-        // Transfer DPX from user to vault
-        dpx.transferFrom(msg.sender, address(this), amount);
         // Deposit into staking rewards
         stakingRewards.stake(amount);
+
         emit LogNewDeposit(epoch + 1, strike, msg.sender);
+
         return true;
     }
 
@@ -261,6 +272,11 @@ contract Vault is Ownable {
         public
         returns (bool)
     {
+        // Must be a valid strikeIndex
+        require(
+            strikeIndex < epochStrikes[epoch].length,
+            "Invalid strike index"
+        );
         // Must be bootstrapped
         require(
             getCurrentMonthlyEpoch() == epoch,
@@ -304,8 +320,17 @@ contract Vault is Ownable {
         uint256 amount,
         address user
     ) public returns (bool) {
-        uint256 strike = epochStrikes[epoch + 1][strikeIndex];
+        // Must be a valid strikeIndex
+        require(
+            strikeIndex < epochStrikes[epoch].length,
+            "Invalid strike index"
+        );
+
+        uint256 strike = epochStrikes[epoch][strikeIndex];
         uint256 currentPrice = getUsdPrice(address(dpx));
+
+        // Must be a valid strike
+        require(strike != 0, "Invalid strike");
 
         // Revert if strike price is higher than current price
         require(strike < currentPrice, "Strike is higher than current price");
@@ -381,6 +406,12 @@ contract Vault is Ownable {
         require(
             withdrawEpoch < epoch && epoch == getCurrentMonthlyEpoch(),
             "Withdraw epoch must be in the past"
+        );
+
+        // Must be a valid strikeIndex
+        require(
+            strikeIndex < epochStrikes[withdrawEpoch].length,
+            "Invalid strike index"
         );
 
         // Must be a valid strike
@@ -549,5 +580,9 @@ contract Vault is Ownable {
 
     function getUsdPrice(address _token) public returns (uint256) {
         return priceOracleAggregator.getPriceInUSD(_token);
+    }
+
+    function viewUsdPrice(address _token) public view returns (uint256) {
+        return priceOracleAggregator.viewPriceInUSD(_token);
     }
 }
