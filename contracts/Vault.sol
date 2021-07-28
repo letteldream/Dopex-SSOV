@@ -98,6 +98,9 @@ contract Vault is Ownable {
     // Premium collected per strike for an epoch
     // mapping (epoch => (strike => premium))
     mapping(uint256 => mapping(uint256 => uint256)) public totalEpochPremium;
+    // User premium collected per strike for an epoch
+    // mapping (epoch => (abi.encodePacked(user, strike) => user premium))
+    mapping(uint256 => mapping(bytes32 => uint256)) public userEpochPremium;
     // Total dpx tokens that were sent back to the buyer when a
     // vault is exercised
     // mapping (epoch => amount)
@@ -311,26 +314,28 @@ contract Vault is Ownable {
             "User didn't deposit enough for purchase"
         );
 
-        // Add to total epoch calls purchased
-        totalEpochCallsPurchased[epoch][strike] += amount;
-        // Add to user epoch calls purchased
-        userEpochCallsPurchased[epoch][userStrike] += amount;
+        // Transfer doTokens to user
+        IERC20(epochStrikeTokens[epoch][strike]).transfer(msg.sender, amount);
 
         // Get total premium for all calls being purchased
         uint256 premium = optionPricing
         .getOptionPrice(
             false,
-            strike,
-            getMonthlyExpiryFromTimestamp(block.timestamp)
+            getMonthlyExpiryFromTimestamp(block.timestamp),
+            strike
         ).mul(amount)
         .div(getUsdPrice(address(dpx)));
-        // Add to total epoch premium
-        totalEpochPremium[epoch][strike] += premium;
         // Transfer usd equivalent to premium from user
         dpx.transferFrom(msg.sender, address(this), premium);
 
-        // Transfer doTokens to user
-        IERC20(epochStrikeTokens[epoch][strike]).transfer(msg.sender, amount);
+        // Add to total epoch calls purchased
+        totalEpochCallsPurchased[epoch][strike] += amount;
+        // Add to user epoch calls purchased
+        userEpochCallsPurchased[epoch][userStrike] += amount;
+        // Add to total epoch premium
+        totalEpochPremium[epoch][strike] += premium;
+        // Add to user epoch premium
+        userEpochPremium[epoch][userStrike] += premium;
 
         emit LogNewPurchase(epoch, strike, msg.sender, amount, premium);
 
