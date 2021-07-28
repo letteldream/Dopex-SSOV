@@ -228,6 +228,9 @@ contract Vault is Ownable {
             "Invalid strike index"
         );
 
+        // Must positive amount
+        require(amount > 0, "Invalid amount");
+
         // Must be a valid strike
         uint256 strike = epochStrikes[epoch + 1][strikeIndex];
         require(strike != 0, "Invalid strike");
@@ -286,6 +289,9 @@ contract Vault is Ownable {
             strikeIndex < epochStrikes[epoch].length,
             "Invalid strike index"
         );
+
+        // Must positive amount
+        require(amount > 0, "Invalid amount");
 
         // Must be bootstrapped
         require(
@@ -351,11 +357,14 @@ contract Vault is Ownable {
             "Invalid strike index"
         );
 
-        uint256 strike = epochStrikes[epoch][strikeIndex];
-        uint256 currentPrice = getUsdPrice(address(dpx));
+        // Must positive amount
+        require(amount > 0, "Invalid amount");
 
         // Must be a valid strike
+        uint256 strike = epochStrikes[epoch][strikeIndex];
         require(strike != 0, "Invalid strike");
+
+        uint256 currentPrice = getUsdPrice(address(dpx));
 
         // Revert if strike price is higher than current price
         require(strike < currentPrice, "Strike is higher than current price");
@@ -591,6 +600,7 @@ contract Vault is Ownable {
      */
     function getCurrentMonthlyEpoch() public view returns (uint256) {
         if (block.timestamp < epochInitTime) return 0;
+        if (epochInitTime == 0) return 1;
         /**
          * Monthly Epoch = ((Current time - Init time) / 28 days) + 1
          * The current time is adjust to account for any 'init time' by adding to it the difference
