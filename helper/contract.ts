@@ -3,6 +3,9 @@ import { Contract } from "ethers";
 import { PriceOracleAggregator } from "../types/PriceOracleAggregator";
 import { ChainlinkUSDAdapter } from "../types/ChainlinkUSDAdapter";
 import { UniswapV2Oracle } from "../types/UniswapV2Oracle";
+import { MockDPXChainlinkUSDAdapter } from "../types/MockDPXChainlinkUSDAdapter";
+import { MockOptionPricing } from "../types/MockOptionPricing";
+import { Vault} from "../types/Vault";
 
 const hre = require("hardhat");
 
@@ -50,5 +53,35 @@ export const deployUniswapV2Oracle = async (
     tokenA,
     tokenB,
     aggregator,
+  ]);
+}
+
+export const deployMockDPXChainlinkUSDAdapter = async () => {
+  return await deployContract<MockDPXChainlinkUSDAdapter>(
+    "MockDPXChainlinkUSDAdapter",
+    []
+  );
+};
+
+export const deployMockOptionPricing = async () => {
+  return await deployContract<MockOptionPricing>(
+    "MockOptionPricing",
+    []
+  );
+};
+
+export const deployVault = async (
+    dpx: string,
+    rdpx: string,
+    stakingRewards: string,
+    optionPricing: string,
+    priceOracleAggregator: string
+) => {
+  return await deployContract<Vault>("Vault", [
+    dpx,
+    rdpx,
+    stakingRewards,
+    optionPricing,
+    priceOracleAggregator
   ]);
 }
