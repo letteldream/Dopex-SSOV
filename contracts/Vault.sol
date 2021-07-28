@@ -240,6 +240,7 @@ contract Vault is Ownable {
         // Add to total epoch deposits
         totalEpochDeposits[epoch + 1] += amount;
         // Deposit into staking rewards
+        dpx.approve(address(stakingRewards), amount);
         stakingRewards.stake(amount);
 
         emit LogNewDeposit(epoch + 1, strike, msg.sender);
