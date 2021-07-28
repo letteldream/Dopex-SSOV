@@ -1,5 +1,5 @@
 import { ethers, BigNumber } from 'ethers'
-import { network } from "hardhat";
+import hre, { network } from "hardhat";
 
 export const expandTo18Decimals = (n: number): BigNumber => {
   return BigNumber.from(n).mul(BigNumber.from(10).pow(18))
@@ -49,7 +49,13 @@ export const encodeParams = (dataTypes: any[], data: any[]) => {
   const abiCoder = ethers.utils.defaultAbiCoder
   return abiCoder.encode(dataTypes, data)
 }
+
 export const timeTravel = async (seconds: number) => {
   await network.provider.send("evm_increaseTime", [seconds]);
   await network.provider.send("evm_mine", []);
 };
+
+export const unlockAccount = async (address: string) => {
+  await hre.network.provider.send("hardhat_impersonateAccount", [address]);
+  return address;
+}
