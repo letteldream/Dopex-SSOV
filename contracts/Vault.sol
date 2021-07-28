@@ -69,7 +69,7 @@ contract Vault is Ownable {
     // Mapping of strikes for each epoch
     mapping(uint256 => uint256[]) public epochStrikes;
     // Mapping of (epoch => (strike => tokens))
-    mapping(uint256 => mapping(uint256 => address)) epochStrikeTokens;
+    mapping(uint256 => mapping(uint256 => address)) public epochStrikeTokens;
 
     // Total epoch deposits for specific strikes
     // mapping (epoch => (strike => deposits))
@@ -91,6 +91,10 @@ contract Vault is Ownable {
     // mapping (epoch => (strike => calls purchased))
     mapping(uint256 => mapping(uint256 => uint256))
         public totalEpochCallsPurchased;
+    // Calls purchased by user for each strike
+    // mapping (epoch => (abi.encodePacked(user, strike) => user calls purchased))
+    mapping(uint256 => mapping(bytes32 => uint256))
+        public userEpochCallsPurchased;
     // Premium collected per strike for an epoch
     // mapping (epoch => (strike => premium))
     mapping(uint256 => mapping(uint256 => uint256)) public totalEpochPremium;
@@ -224,11 +228,11 @@ contract Vault is Ownable {
             "Invalid strike index"
         );
 
-        uint256 strike = epochStrikes[epoch + 1][strikeIndex];
-        bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
-
         // Must be a valid strike
+        uint256 strike = epochStrikes[epoch + 1][strikeIndex];
         require(strike != 0, "Invalid strike");
+
+        bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
 
         // Transfer DPX from user to vault
         dpx.transferFrom(msg.sender, address(this), amount);
@@ -258,6 +262,10 @@ contract Vault is Ownable {
         uint256[] memory strikeIndices,
         uint256[] memory amounts
     ) public returns (bool) {
+        require(
+            strikeIndices.length == amounts.length,
+            "Invalid strikeIndices/amounts"
+        );
         for (uint256 i = 0; i < strikeIndices.length; i++)
             deposit(strikeIndices[i], amounts[i]);
         return true;
@@ -278,16 +286,30 @@ contract Vault is Ownable {
             strikeIndex < epochStrikes[epoch].length,
             "Invalid strike index"
         );
+
         // Must be bootstrapped
         require(
             getCurrentMonthlyEpoch() == epoch,
             "Epoch hasn't been bootstrapped"
         );
-        uint256 strike = epochStrikes[epoch][strikeIndex];
+
         // Must be a valid strike
+        uint256 strike = epochStrikes[epoch][strikeIndex];
         require(strike != 0, "Invalid strike");
+
+        // Must deposit enough by user
+        bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
+        require(
+            userEpochCallsPurchased[epoch][userStrike] + amount <=
+                userEpochDeposits[epoch][userStrike],
+            "User didn't deposit enough for purchase"
+        );
+
         // Add to total epoch calls purchased
         totalEpochCallsPurchased[epoch][strike] += amount;
+        // Add to user epoch calls purchased
+        userEpochCallsPurchased[epoch][userStrike] += amount;
+
         // Get total premium for all calls being purchased
         uint256 premium = optionPricing
         .getOptionPrice(
@@ -300,8 +322,10 @@ contract Vault is Ownable {
         totalEpochPremium[epoch][strike] += premium;
         // Transfer usd equivalent to premium from user
         dpx.transferFrom(msg.sender, address(this), premium);
+
         // Transfer doTokens to user
         IERC20(epochStrikeTokens[epoch][strike]).transfer(msg.sender, amount);
+
         emit LogNewPurchase(epoch, strike, msg.sender, amount, premium);
 
         return true;
@@ -513,6 +537,7 @@ contract Vault is Ownable {
             timestamp.getMonth() + 1,
             0
         );
+
         if (lastDay.getDayOfWeek() < 5) {
             lastDay = BokkyPooBahsDateTimeLibrary.timestampFromDate(
                 lastDay.getYear(),
@@ -520,15 +545,43 @@ contract Vault is Ownable {
                 lastDay.getDay() - 7
             );
         }
-        return
-            BokkyPooBahsDateTimeLibrary.timestampFromDateTime(
-                lastDay.getYear(),
-                lastDay.getMonth(),
-                lastDay.getDay() - (lastDay.getDayOfWeek() - 5),
+
+        uint256 lastFridayOfMonth = BokkyPooBahsDateTimeLibrary
+        .timestampFromDateTime(
+            lastDay.getYear(),
+            lastDay.getMonth(),
+            lastDay.getDay() - (lastDay.getDayOfWeek() - 5),
+            12,
+            0,
+            0
+        );
+
+        if (lastFridayOfMonth <= timestamp) {
+            uint256 temp = BokkyPooBahsDateTimeLibrary.timestampFromDate(
+                timestamp.getYear(),
+                timestamp.getMonth() + 2,
+                0
+            );
+
+            if (temp.getDayOfWeek() < 5) {
+                temp = BokkyPooBahsDateTimeLibrary.timestampFromDate(
+                    temp.getYear(),
+                    temp.getMonth(),
+                    temp.getDay() - 7
+                );
+            }
+
+            lastFridayOfMonth = BokkyPooBahsDateTimeLibrary
+            .timestampFromDateTime(
+                temp.getYear(),
+                temp.getMonth(),
+                temp.getDay() - (temp.getDayOfWeek() - 5),
                 12,
                 0,
                 0
             );
+        }
+        return lastFridayOfMonth;
     }
 
     /**
