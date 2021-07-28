@@ -11,7 +11,7 @@ import {
 } from "../helper/contract";
 import { timeTravel, expandTo18Decimals, unlockAccount } from "../helper/util";
 import { dpxHolders, dpx, dpxTokenAbi, rdpx, rdpxTokenAbi, stakingRewards } from "../helper/data";
-import { Vault } from '../types';
+import { Vault, MockOptionPricing } from '../types';
 
 describe("Vault test", async () => {
   let signers: SignerWithAddress[];
@@ -21,6 +21,7 @@ describe("Vault test", async () => {
   let user2: Signer;
   let dpxToken: Contract;
   let rdpxToken: Contract;
+  let optionPricing: MockOptionPricing;
   let vault: Vault;
   let strikes = [80, 120, 150, 0];
 
@@ -62,10 +63,10 @@ describe("Vault test", async () => {
     await priceOracleAggregator.getPriceInUSD(dpx);
 
     // Mock Option Pricing
-    const mockOptionPricing = await deployMockOptionPricing();
+    optionPricing = await deployMockOptionPricing();
 
     // Vault
-    vault = await deployVault(dpx, rdpx, stakingRewards, mockOptionPricing.address, priceOracleAggregator.address);
+    vault = await deployVault(dpx, rdpx, stakingRewards, optionPricing.address, priceOracleAggregator.address);
   });
 
   // Contract Info
@@ -180,12 +181,142 @@ describe("Vault test", async () => {
         const currentEpoch = await vault.epoch();
         expect(currentEpoch).to.equal(pastEpoch.add(1));
         for (let i = 0; i < 3; i++) {
-            let epochStrikeTokenAddress = await vault.epochStrikeTokens(currentEpoch, strikes[i]);
-            let epochStrikeToken = await ethers.getContractAt(dpxTokenAbi, epochStrikeTokenAddress);
+            const epochStrikeTokenAddress = await vault.epochStrikeTokens(currentEpoch, strikes[i]);
+            const epochStrikeToken = await ethers.getContractAt(dpxTokenAbi, epochStrikeTokenAddress);
             expect(await epochStrikeToken.name()).to.equal(`DPX-CALL${strikes[i]}-EPOCH-${currentEpoch}`)
             expect(await epochStrikeToken.symbol()).to.equal(`DPX-CALL${strikes[i]}-EPOCH-${currentEpoch}`)
             expect(await epochStrikeToken.balanceOf(vault.address)).to.equal(await vault.totalEpochStrikeDeposits(currentEpoch, strikes[i]))
         }
     })
   });
+
+  // Purchase
+  describe("Purchase", async () => {
+      
+    // Purhcase Invalid Strike
+    it("Purhcase Invalid Strike", async () => {
+        await expect(vault.connect(user0).purchase(4, 10)).to.be.revertedWith("Invalid strike index");
+        await expect(vault.connect(user0).purchase(3, 10)).to.be.revertedWith("Invalid strike");
+    });
+
+    // Purchase un-bootstrapped epoch
+    it("Purchase un-bootstrapped epoch", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+        
+        // Set Strikes
+        await vault.connect(owner).setStrikes(strikes);
+        
+        // Deposit
+        const amount0 = expandTo18Decimals(10);
+        await dpxToken.connect(user0).approve(vault.address, amount0);
+        await vault.connect(user0).deposit(0, amount0);
+
+        // Purchase before bootstrap
+        await expect(vault.connect(user0).purchase(0, amount0)).to.be.revertedWith("Epoch hasn't been bootstrapped");
+
+        timeTravel(-24 * 60 * 60 * 30);
+    })
+
+    // Purchase exceeds the deposit amount
+    it("Purhcase exceeds the deposit amount", async () => {
+        await expect(vault.connect(user0).purchase(0, expandTo18Decimals(20))).to.be.revertedWith("User didn't deposit enough for purchase");
+    })
+
+    // Purchase
+    it("Purchase by user0", async () => {
+        const amount = expandTo18Decimals(5);
+        const user0Address = await user0.getAddress();
+        const epoch = await vault.epoch();
+        const strike = await vault.epochStrikes(epoch, 0);
+        const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user0Address, strike]);
+        const block = await ethers.provider.getBlock(await ethers.provider.getBlockNumber());
+        const expiry = await vault.getMonthlyExpiryFromTimestamp(block.timestamp);
+        const usdPrice = await vault.viewUsdPrice(dpxToken.address);
+        const premium = amount.mul(await optionPricing.getOptionPrice(false, expiry, strike)).div(usdPrice);
+
+        // Epoch Strike Token
+        const epochStrikeTokenAddress = await vault.epochStrikeTokens(epoch, strike);
+        const epochStrikeToken = await ethers.getContractAt(dpxTokenAbi, epochStrikeTokenAddress);
+
+        // Past Data
+        const pastEpochStrikeTokenBalanceOfVault = await epochStrikeToken.balanceOf(vault.address);
+        const pastEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user0Address);
+        const pastDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+        const pastDpxTokenBalanceOfUser = await dpxToken.balanceOf(user0Address);
+        const pastTotalEpochCallsPurchased = await vault.totalEpochCallsPurchased(epoch, strike);
+        const pastUserEpochCallsPurchased = await vault.userEpochCallsPurchased(epoch, userStrike);
+        const pastTotalEpochPremium = await vault.totalEpochPremium(epoch, strike);
+        const pastUserEpochPremium = await vault.userEpochPremium(epoch, userStrike);
+        
+        // Purchase & Event
+        await dpxToken.connect(user0).approve(vault.address, premium);
+        await expect(vault.connect(user0).purchase(0, amount)).to.emit(vault, "LogNewPurchase");
+
+        // Current Data
+        const currentEpochStrikeTokenBalanceOfVault = await epochStrikeToken.balanceOf(vault.address);
+        expect(currentEpochStrikeTokenBalanceOfVault).to.equal(pastEpochStrikeTokenBalanceOfVault.sub(amount));
+        const currentEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user0Address);
+        expect(currentEpochStrikeTokenBalanceOfUser).to.equal(pastEpochStrikeTokenBalanceOfUser.add(amount));
+        const currentDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+        expect(currentDpxTokenBalanceOfVault).to.equal(pastDpxTokenBalanceOfVault.add(premium));
+        const currentDpxTokenBalanceOfUser = await dpxToken.balanceOf(user0Address);
+        expect(currentDpxTokenBalanceOfUser).to.equal(pastDpxTokenBalanceOfUser.sub(premium));
+        const currentTotalEpochCallsPurchased = await vault.totalEpochCallsPurchased(epoch, strike);
+        expect(currentTotalEpochCallsPurchased).to.equal(pastTotalEpochCallsPurchased.add(amount));
+        const currentUserEpochCallsPurchased = await vault.userEpochCallsPurchased(epoch, userStrike);
+        expect(currentUserEpochCallsPurchased).to.equal(pastUserEpochCallsPurchased.add(amount));
+        const currentTotalEpochPremium = await vault.totalEpochPremium(epoch, strike);
+        expect(currentTotalEpochPremium).to.equal(pastTotalEpochPremium.add(premium));
+        const currentUserEpochPremium = await vault.userEpochPremium(epoch, userStrike);
+        expect(currentUserEpochPremium).to.equal(pastUserEpochPremium.add(premium));
+    })
+
+    it("Purchase by user1", async () => {
+        const amount = expandTo18Decimals(10);
+        const user1Address = await user1.getAddress();
+        const epoch = await vault.epoch();
+        const strike = await vault.epochStrikes(epoch, 1);
+        const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user1Address, strike]);
+        const block = await ethers.provider.getBlock(await ethers.provider.getBlockNumber());
+        const expiry = await vault.getMonthlyExpiryFromTimestamp(block.timestamp);
+        const usdPrice = await vault.viewUsdPrice(dpxToken.address);
+        const premium = amount.mul(await optionPricing.getOptionPrice(false, expiry, strike)).div(usdPrice);
+
+        // Epoch Strike Token
+        const epochStrikeTokenAddress = await vault.epochStrikeTokens(epoch, strike);
+        const epochStrikeToken = await ethers.getContractAt(dpxTokenAbi, epochStrikeTokenAddress);
+
+        // Past Data
+        const pastEpochStrikeTokenBalanceOfVault = await epochStrikeToken.balanceOf(vault.address);
+        const pastEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user1Address);
+        const pastDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+        const pastDpxTokenBalanceOfUser = await dpxToken.balanceOf(user1Address);
+        const pastTotalEpochCallsPurchased = await vault.totalEpochCallsPurchased(epoch, strike);
+        const pastUserEpochCallsPurchased = await vault.userEpochCallsPurchased(epoch, userStrike);
+        const pastTotalEpochPremium = await vault.totalEpochPremium(epoch, strike);
+        const pastUserEpochPremium = await vault.userEpochPremium(epoch, userStrike);
+        
+        // Purchase & Event
+        await dpxToken.connect(user1).approve(vault.address, premium);
+        await expect(vault.connect(user1).purchase(1, amount)).to.emit(vault, "LogNewPurchase");
+
+        // Current Data
+        const currentEpochStrikeTokenBalanceOfVault = await epochStrikeToken.balanceOf(vault.address);
+        expect(currentEpochStrikeTokenBalanceOfVault).to.equal(pastEpochStrikeTokenBalanceOfVault.sub(amount));
+        const currentEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user1Address);
+        expect(currentEpochStrikeTokenBalanceOfUser).to.equal(pastEpochStrikeTokenBalanceOfUser.add(amount));
+        const currentDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+        expect(currentDpxTokenBalanceOfVault).to.equal(pastDpxTokenBalanceOfVault.add(premium));
+        const currentDpxTokenBalanceOfUser = await dpxToken.balanceOf(user1Address);
+        expect(currentDpxTokenBalanceOfUser).to.equal(pastDpxTokenBalanceOfUser.sub(premium));
+        const currentTotalEpochCallsPurchased = await vault.totalEpochCallsPurchased(epoch, strike);
+        expect(currentTotalEpochCallsPurchased).to.equal(pastTotalEpochCallsPurchased.add(amount));
+        const currentUserEpochCallsPurchased = await vault.userEpochCallsPurchased(epoch, userStrike);
+        expect(currentUserEpochCallsPurchased).to.equal(pastUserEpochCallsPurchased.add(amount));
+        const currentTotalEpochPremium = await vault.totalEpochPremium(epoch, strike);
+        expect(currentTotalEpochPremium).to.equal(pastTotalEpochPremium.add(premium));
+        const currentUserEpochPremium = await vault.userEpochPremium(epoch, userStrike);
+        expect(currentUserEpochPremium).to.equal(pastUserEpochPremium.add(premium));
+    })
+  })
 });
