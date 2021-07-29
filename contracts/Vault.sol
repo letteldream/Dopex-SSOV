@@ -133,6 +133,12 @@ contract Vault is Ownable {
         uint256 oldBalance,
         uint256 newBalance
     );
+    event LogNewWithdrawForStrike(
+        uint256 epoch,
+        uint256 strike,
+        address user,
+        uint256 amount
+    );
 
     constructor(
         address _dpx,
@@ -482,6 +488,13 @@ contract Vault is Ownable {
         totalEpochStrikeDeposits[withdrawEpoch][strike] -= userStrikeDeposits;
 
         dpx.transfer(msg.sender, userStrikeDeposits);
+
+        emit LogNewWithdrawForStrike(
+            withdrawEpoch,
+            strike,
+            msg.sender,
+            userStrikeDeposits
+        );
 
         return true;
     }
