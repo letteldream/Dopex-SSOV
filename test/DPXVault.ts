@@ -9,7 +9,7 @@ import {
   deployMockOptionPricing,
   deployVault
 } from "../helper/contract";
-import { timeTravel, expandTo18Decimals, unlockAccount } from "../helper/util";
+import { timeTravel, expandTo18Decimals, expandToDecimals, unlockAccount } from "../helper/util";
 import { dpxHolders, dpx, dpxTokenAbi, rdpx, rdpxTokenAbi, stakingRewards } from "../helper/data";
 import { Vault, MockOptionPricing } from '../types';
 
@@ -23,7 +23,7 @@ describe("Vault test", async () => {
   let rdpxToken: Contract;
   let optionPricing: MockOptionPricing;
   let vault: Vault;
-  let strikes = [80, 120, 150, 0];
+  let strikes = [expandToDecimals(80, 8), expandToDecimals(120, 8), expandToDecimals(150, 8), 0];
 
   // Contract Setup
   before(async () => {
@@ -81,7 +81,7 @@ describe("Vault test", async () => {
 
       // DPX token price = 100$
       it("DPX token price is 100 USD", async () => {
-          expect((await vault.viewUsdPrice(dpx)).toNumber()).to.equal(100 * 10 ** 8);
+          expect((await vault.viewUsdPrice(dpx))).to.equal(expandToDecimals(100, 8));
       })
   });
 
@@ -97,9 +97,9 @@ describe("Vault test", async () => {
     it("Set Strikes Success", async () => {
         await vault.connect(owner).setStrikes(strikes);
 
-        expect((await vault.epochStrikes(1, 0)).toNumber()).to.equal(strikes[0]);
-        expect((await vault.epochStrikes(1, 1)).toNumber()).to.equal(strikes[1]);
-        expect((await vault.epochStrikes(1, 2)).toNumber()).to.equal(strikes[2]);
+        expect((await vault.epochStrikes(1, 0))).to.equal(strikes[0]);
+        expect((await vault.epochStrikes(1, 1))).to.equal(strikes[1]);
+        expect((await vault.epochStrikes(1, 2))).to.equal(strikes[2]);
     })
   });
 
@@ -183,8 +183,11 @@ describe("Vault test", async () => {
         for (let i = 0; i < 3; i++) {
             const epochStrikeTokenAddress = await vault.epochStrikeTokens(currentEpoch, strikes[i]);
             const epochStrikeToken = await ethers.getContractAt(dpxTokenAbi, epochStrikeTokenAddress);
+
             expect(await epochStrikeToken.name()).to.equal(`DPX-CALL${strikes[i]}-EPOCH-${currentEpoch}`)
+
             expect(await epochStrikeToken.symbol()).to.equal(`DPX-CALL${strikes[i]}-EPOCH-${currentEpoch}`)
+
             expect(await epochStrikeToken.balanceOf(vault.address)).to.equal(await vault.totalEpochStrikeDeposits(currentEpoch, strikes[i]))
         }
     })
@@ -255,18 +258,25 @@ describe("Vault test", async () => {
         // Current Data
         const currentEpochStrikeTokenBalanceOfVault = await epochStrikeToken.balanceOf(vault.address);
         expect(currentEpochStrikeTokenBalanceOfVault).to.equal(pastEpochStrikeTokenBalanceOfVault.sub(amount));
+
         const currentEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user0Address);
         expect(currentEpochStrikeTokenBalanceOfUser).to.equal(pastEpochStrikeTokenBalanceOfUser.add(amount));
+
         const currentDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
         expect(currentDpxTokenBalanceOfVault).to.equal(pastDpxTokenBalanceOfVault.add(premium));
+
         const currentDpxTokenBalanceOfUser = await dpxToken.balanceOf(user0Address);
         expect(currentDpxTokenBalanceOfUser).to.equal(pastDpxTokenBalanceOfUser.sub(premium));
+
         const currentTotalEpochCallsPurchased = await vault.totalEpochCallsPurchased(epoch, strike);
         expect(currentTotalEpochCallsPurchased).to.equal(pastTotalEpochCallsPurchased.add(amount));
+
         const currentUserEpochCallsPurchased = await vault.userEpochCallsPurchased(epoch, userStrike);
         expect(currentUserEpochCallsPurchased).to.equal(pastUserEpochCallsPurchased.add(amount));
+
         const currentTotalEpochPremium = await vault.totalEpochPremium(epoch, strike);
         expect(currentTotalEpochPremium).to.equal(pastTotalEpochPremium.add(premium));
+
         const currentUserEpochPremium = await vault.userEpochPremium(epoch, userStrike);
         expect(currentUserEpochPremium).to.equal(pastUserEpochPremium.add(premium));
     })
@@ -303,20 +313,122 @@ describe("Vault test", async () => {
         // Current Data
         const currentEpochStrikeTokenBalanceOfVault = await epochStrikeToken.balanceOf(vault.address);
         expect(currentEpochStrikeTokenBalanceOfVault).to.equal(pastEpochStrikeTokenBalanceOfVault.sub(amount));
+
         const currentEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user1Address);
         expect(currentEpochStrikeTokenBalanceOfUser).to.equal(pastEpochStrikeTokenBalanceOfUser.add(amount));
+
         const currentDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
         expect(currentDpxTokenBalanceOfVault).to.equal(pastDpxTokenBalanceOfVault.add(premium));
+
         const currentDpxTokenBalanceOfUser = await dpxToken.balanceOf(user1Address);
         expect(currentDpxTokenBalanceOfUser).to.equal(pastDpxTokenBalanceOfUser.sub(premium));
+
         const currentTotalEpochCallsPurchased = await vault.totalEpochCallsPurchased(epoch, strike);
         expect(currentTotalEpochCallsPurchased).to.equal(pastTotalEpochCallsPurchased.add(amount));
+
         const currentUserEpochCallsPurchased = await vault.userEpochCallsPurchased(epoch, userStrike);
         expect(currentUserEpochCallsPurchased).to.equal(pastUserEpochCallsPurchased.add(amount));
+
         const currentTotalEpochPremium = await vault.totalEpochPremium(epoch, strike);
         expect(currentTotalEpochPremium).to.equal(pastTotalEpochPremium.add(premium));
+
         const currentUserEpochPremium = await vault.userEpochPremium(epoch, userStrike);
         expect(currentUserEpochPremium).to.equal(pastUserEpochPremium.add(premium));
+    })
+  });
+
+  // Exercise
+  describe("Exercise", async () => {
+
+    // Exercise Invalid Strike
+    it("Exercise Invalid Strike", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        // Set Strikes & Bootstrap
+        await vault.connect(owner).setStrikes(strikes);
+        await vault.connect(owner).bootstrap();
+
+        const user0Address = await user0.getAddress()
+        const epoch = (await vault.epoch()).sub(1)
+
+        await expect(vault.connect(user0).exercise(epoch, 4, 10, user0Address)).to.be.revertedWith("Invalid strike index")
+        await expect(vault.connect(user0).exercise(epoch, 3, 10, user0Address)).to.be.revertedWith("Invalid strike")
+        await expect(vault.connect(user0).exercise(epoch, 1, 10, user0Address)).to.be.revertedWith("Strike is higher than current price")
+
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // Exercise not past epoch
+    it("Exercise not past epoch", async () => {
+        const user0Address = await user0.getAddress()
+        const epoch = await vault.epoch()
+
+        await expect(vault.connect(user0).exercise(epoch, 0, 1, user0Address)).to.be.revertedWith("Exercise epoch must be in the past")
+
+
+        timeTravel(24 * 60 * 60 * 30);
+
+        await expect(vault.connect(user0).exercise(epoch, 0, 1, user0Address)).to.be.revertedWith("Exercise epoch must be in the past")
+
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // Exercise by user0
+    it("Exercise by user0", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        const user0Address = await user0.getAddress()
+        const epoch = (await vault.epoch()).sub(1)
+        const amount = expandTo18Decimals(2);
+        const strike = await vault.epochStrikes(epoch, 0);
+        const usdPrice = await vault.viewUsdPrice(dpxToken.address);
+        const PnL = amount.mul(usdPrice.sub(strike)).div(usdPrice);
+
+        // Epoch Strike Token
+        const epochStrikeTokenAddress = await vault.epochStrikeTokens(epoch, strike);
+        const epochStrikeToken = await ethers.getContractAt(dpxTokenAbi, epochStrikeTokenAddress);
+
+        // Past Data
+        const pastEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user0Address);
+        const pastEpochStrikeTokenTotalSupply = await epochStrikeToken.totalSupply();
+        const pastTotalTokenVaultExercises = await vault.totalTokenVaultExercises(epoch);
+        const pastDpxTokenBalanceOfUser = await dpxToken.balanceOf(user0Address);
+        const pastDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+
+        // Exercise
+        await epochStrikeToken.connect(user0).approve(vault.address, amount);
+        await expect(vault.connect(user0).exercise(epoch, 0, amount, user0Address)).to.emit(vault, "LogNewExercise");
+
+        // Current Data
+        const currentEpochStrikeTokenBalanceOfUser = await epochStrikeToken.balanceOf(user0Address);
+        expect(currentEpochStrikeTokenBalanceOfUser).to.equal(pastEpochStrikeTokenBalanceOfUser.sub(amount))
+
+        const currentEpochStrikeTokenTotalSupply = await epochStrikeToken.totalSupply();
+        expect(currentEpochStrikeTokenTotalSupply).to.equal(pastEpochStrikeTokenTotalSupply.sub(amount))
+
+        const currentTotalTokenVaultExercises = await vault.totalTokenVaultExercises(epoch);
+        expect(currentTotalTokenVaultExercises).to.equal(pastTotalTokenVaultExercises.add(PnL))
+
+        const currentDpxTokenBalanceOfUser = await dpxToken.balanceOf(user0Address);
+        expect(currentDpxTokenBalanceOfUser).to.equal(pastDpxTokenBalanceOfUser.add(PnL))
+
+        const currentDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+        expect(currentDpxTokenBalanceOfVault).to.equal(pastDpxTokenBalanceOfVault.sub(PnL))
+        
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // Exercise by user1
+    it("Exercise by user1", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        const user1Address = await user1.getAddress()
+        const epoch = (await vault.epoch()).sub(1)
+        const amount = expandTo18Decimals(2);
+
+        await expect(vault.connect(user1).exercise(epoch, 0, 1, user1Address)).to.be.revertedWith("Option token balance is not enough")
+
+        timeTravel(-24 * 60 * 60 * 30);
     })
   })
 });
