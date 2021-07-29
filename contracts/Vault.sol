@@ -120,6 +120,13 @@ contract Vault is Ownable {
         uint256 amount,
         uint256 premium
     );
+    event LogNewExercise(
+        uint256 epoch,
+        uint256 strike,
+        address user,
+        uint256 amount,
+        uint256 pnl
+    );
     event LogCompound(
         uint256 epoch,
         uint256 rewards,
@@ -344,21 +351,27 @@ contract Vault is Ownable {
 
     /**
      * Exercise calculates the PnL for the user. Withdraw the PnL in DPX from the SSF and transfer it to the user. Will also the burn the doTokens from the user.
-     * @param epoch Target epoch
+     * @param exerciseEpoch Target epoch
      * @param strikeIndex Strike index for current epoch
-     * @param amount Amount of calls to purchase
+     * @param amount Amount of calls to exercise
      * @param user Address of the user
      * @return Whether vault was exercised
      */
     function exercise(
-        uint256 epoch,
+        uint256 exerciseEpoch,
         uint256 strikeIndex,
         uint256 amount,
         address user
     ) public returns (bool) {
+        // Must be a past epoch
+        require(
+            exerciseEpoch < epoch && epoch == getCurrentMonthlyEpoch(),
+            "Exercise epoch must be in the past"
+        );
+
         // Must be a valid strikeIndex
         require(
-            strikeIndex < epochStrikes[epoch].length,
+            strikeIndex < epochStrikes[exerciseEpoch].length,
             "Invalid strike index"
         );
 
@@ -366,7 +379,7 @@ contract Vault is Ownable {
         require(amount > 0, "Invalid amount");
 
         // Must be a valid strike
-        uint256 strike = epochStrikes[epoch][strikeIndex];
+        uint256 strike = epochStrikes[exerciseEpoch][strikeIndex];
         require(strike != 0, "Invalid strike");
 
         uint256 currentPrice = getUsdPrice(address(dpx));
@@ -377,12 +390,10 @@ contract Vault is Ownable {
         // Revert if user is zero address
         require(user != address(0), "Invalid user address");
 
-        // Rever if amount is zero
-        require(amount > 0, "Invalid amount");
-
         // Revert if user does not have enough option token balance for the amount specified
         require(
-            IERC20(epochStrikeTokens[epoch][strike]).balanceOf(user) >= amount,
+            IERC20(epochStrikeTokens[exerciseEpoch][strike]).balanceOf(user) >=
+                amount,
             "Option token balance is not enough"
         );
 
@@ -390,17 +401,16 @@ contract Vault is Ownable {
         uint256 PnL = ((currentPrice - strike) * amount) / currentPrice;
 
         // Burn user option tokens
-        IERC20(epochStrikeTokens[epoch][strike]).safeTransferFrom(
-            user,
-            address(0),
-            amount
-        );
+        ERC20PresetMinterPauser(epochStrikeTokens[exerciseEpoch][strike])
+            .burnFrom(user, amount);
 
         // Update state to account for exercised options (amount of DPX used in exercising)
-        totalTokenVaultExercises[epoch] += PnL;
+        totalTokenVaultExercises[exerciseEpoch] += PnL;
 
         // Transfer PnL to user
         dpx.safeTransfer(user, PnL);
+
+        emit LogNewExercise(epoch, strike, user, amount, PnL);
 
         return true;
     }
