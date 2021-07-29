@@ -459,6 +459,115 @@ describe("Vault test", async () => {
         await expect(vault.connect(user1).exercise(epoch, 0, 1, user1Address)).to.be.revertedWith("Option token balance is not enough")
 
         timeTravel(-24 * 60 * 60 * 30);
-    })
+    });
+  });
+
+  // Withdraw For Strike
+  describe("Withdraw For Strike", async () => {
+
+    // WithdrawForStrike Invalid Strike
+    it("WithdrawForStrike Invalid Strike", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        const epoch = (await vault.epoch()).sub(1)
+
+        await expect(vault.connect(user0).withdrawForStrike(epoch, 4)).to.be.revertedWith("Invalid strike index")
+        await expect(vault.connect(user0).withdrawForStrike(epoch, 3)).to.be.revertedWith("Invalid strike")
+
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // WithdrawForStrike not past epoch
+    it("WithdrawForStrike not past epoch", async () => {
+        const epoch = await vault.epoch()
+
+        await expect(vault.connect(user0).withdrawForStrike(epoch, 0)).to.be.revertedWith("Withdraw epoch must be in the past")
+
+
+        timeTravel(24 * 60 * 60 * 30);
+
+        await expect(vault.connect(user0).withdrawForStrike(epoch, 0)).to.be.revertedWith("Withdraw epoch must be in the past")
+
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // WithdrawForStrike by user0
+    it("WithdrawForStrike by user0", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        const user0Address = await user0.getAddress()
+        const epoch = (await vault.epoch()).sub(1)
+        const strike = await vault.epochStrikes(epoch, 0);
+        const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user0Address, strike]);
+
+        // Past Data
+        const pastUserStrikeDeposits = await vault.userEpochDeposits(epoch, userStrike);
+        const pastTotalEpochStrikeDeposits = await vault.totalEpochStrikeDeposits(epoch, strike);
+        const pastDpxTokenBalanceOfUser = await dpxToken.balanceOf(user0Address);
+        const pastDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+
+        // Exercise
+        await expect(vault.connect(user0).withdrawForStrike(epoch, 0)).to.emit(vault, "LogNewWithdrawForStrike");
+
+        // Current Data
+        const currentUserStrikeDeposits = await vault.userEpochDeposits(epoch, userStrike);
+        expect(currentUserStrikeDeposits).to.equal(0);
+
+        const currentTotalEpochStrikeDeposits = await vault.totalEpochStrikeDeposits(epoch, strike);
+        expect(currentTotalEpochStrikeDeposits).to.equal(pastTotalEpochStrikeDeposits.sub(pastUserStrikeDeposits));
+
+        const currentDpxTokenBalanceOfUser = await dpxToken.balanceOf(user0Address);
+        expect(currentDpxTokenBalanceOfUser).to.equal(pastDpxTokenBalanceOfUser.add(pastUserStrikeDeposits));
+
+        const currentDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+        expect(currentDpxTokenBalanceOfVault).to.equal(pastDpxTokenBalanceOfVault.sub(pastUserStrikeDeposits));
+        
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // WithdrawForStrike by user1
+    it("WithdrawForStrike by user1", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        const user1Address = await user1.getAddress()
+        const epoch = (await vault.epoch()).sub(1)
+        const strike = await vault.epochStrikes(epoch, 1);
+        const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user1Address, strike]);
+
+        // Past Data
+        const pastUserStrikeDeposits = await vault.userEpochDeposits(epoch, userStrike);
+        const pastTotalEpochStrikeDeposits = await vault.totalEpochStrikeDeposits(epoch, strike);
+        const pastDpxTokenBalanceOfUser = await dpxToken.balanceOf(user1Address);
+        const pastDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+
+        // Exercise
+        await expect(vault.connect(user1).withdrawForStrike(epoch, 1)).to.emit(vault, "LogNewWithdrawForStrike");
+
+        // Current Data
+        const currentUserStrikeDeposits = await vault.userEpochDeposits(epoch, userStrike);
+        expect(currentUserStrikeDeposits).to.equal(0);
+
+        const currentTotalEpochStrikeDeposits = await vault.totalEpochStrikeDeposits(epoch, strike);
+        expect(currentTotalEpochStrikeDeposits).to.equal(pastTotalEpochStrikeDeposits.sub(pastUserStrikeDeposits));
+
+        const currentDpxTokenBalanceOfUser = await dpxToken.balanceOf(user1Address);
+        expect(currentDpxTokenBalanceOfUser).to.equal(pastDpxTokenBalanceOfUser.add(pastUserStrikeDeposits));
+
+        const currentDpxTokenBalanceOfVault = await dpxToken.balanceOf(vault.address);
+        expect(currentDpxTokenBalanceOfVault).to.equal(pastDpxTokenBalanceOfVault.sub(pastUserStrikeDeposits));
+        
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // WithdrawForStrike by user2
+    it("WithdrawForStrike by user2", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        const epoch = (await vault.epoch()).sub(1)
+
+        await expect(vault.connect(user2).withdrawForStrike(epoch, 1)).to.be.revertedWith("User strike deposit amount must be greater than zero")
+        
+        timeTravel(-24 * 60 * 60 * 30);
+    });
   })
 });
