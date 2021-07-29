@@ -10,7 +10,7 @@ import {
   deployVault
 } from "../helper/contract";
 import { timeTravel, expandTo18Decimals, expandToDecimals, unlockAccount } from "../helper/util";
-import { dpxHolders, dpx, dpxTokenAbi, rdpx, rdpxTokenAbi, stakingRewards } from "../helper/data";
+import { dpxHolders, dpx, dpxTokenAbi, rdpx, rdpxTokenAbi, stakingRewards, stakingRewardsContractAbi } from "../helper/data";
 import { Vault, MockOptionPricing } from '../types';
 
 describe("Vault test", async () => {
@@ -21,6 +21,7 @@ describe("Vault test", async () => {
   let user2: Signer;
   let dpxToken: Contract;
   let rdpxToken: Contract;
+  let stakingRewardsContract: Contract;
   let optionPricing: MockOptionPricing;
   let vault: Vault;
   let strikes = [expandToDecimals(80, 8), expandToDecimals(120, 8), expandToDecimals(150, 8), 0];
@@ -48,6 +49,9 @@ describe("Vault test", async () => {
 
     // RdpxToken
     rdpxToken = await ethers.getContractAt(rdpxTokenAbi, rdpx);
+
+    // StakingRewardsContract
+    stakingRewardsContract = await ethers.getContractAt(stakingRewardsContractAbi, stakingRewards);
 
     // Chainlink Price Aggregator
     const priceOracleAggregator = await deployPriceOracleAggregator(
@@ -191,6 +195,32 @@ describe("Vault test", async () => {
             expect(await epochStrikeToken.balanceOf(vault.address)).to.equal(await vault.totalEpochStrikeDeposits(currentEpoch, strikes[i]))
         }
     })
+  });
+
+  // Compound
+  describe("Compound", async () => {
+
+    // Compound un-bootstrapped epoch
+    it("Compound un-bootstrapped epoch", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        // Purchase before bootstrap
+        await expect(vault.connect(user0).compound()).to.be.revertedWith("Epoch hasn't been bootstrapped");
+
+        timeTravel(-24 * 60 * 60 * 30);
+    });
+
+    // Compound
+    it("Compound by any user", async () => {
+        const epoch = await vault.epoch();
+
+        await expect(vault.connect(user2).compound()).to.emit(vault, "LogCompound");
+
+        const totalEpochDpxBalance = await vault.totalEpochDpxBalance(epoch);
+        const stakingRewardsBalanceOfVault = await stakingRewardsContract.balanceOf(vault.address);
+
+        expect(totalEpochDpxBalance).to.equal(stakingRewardsBalanceOfVault);
+    });
   });
 
   // Purchase
