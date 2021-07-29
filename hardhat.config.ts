@@ -25,6 +25,9 @@ export default {
     outDir: "types/",
     target: "ethers-v5",
   },
+  mocha: {
+    timeout: 100000,
+  },
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {
