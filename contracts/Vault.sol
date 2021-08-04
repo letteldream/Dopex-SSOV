@@ -33,6 +33,7 @@ pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
 
+// Libraries
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20PresetMinterPauser} from "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -41,6 +42,7 @@ import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import {BokkyPooBahsDateTimeLibrary} from "./libraries/BokkyPooBahsDateTimeLibrary.sol";
 import {SafeERC20} from "./libraries/SafeERC20.sol";
 
+// Interfaces
 import "./interfaces/IERC20.sol";
 import "./interfaces/IStakingRewards.sol";
 import "./interfaces/IOptionPricing.sol";
@@ -63,9 +65,16 @@ contract Vault is Ownable {
     IOptionPricing public optionPricing;
 
     // Current epoch for vault
-    uint256 public epoch;
-    // Initial bootstrap time
-    uint256 public epochInitTime;
+    uint256 public currentEpoch;
+    /// @dev epoch => the epoch start time
+    mapping(uint256 => uint256) public epochStartTimes;
+    /// @notice Is epoch expired
+    /// @dev epoch => whether the epoch is expired
+    mapping(uint256 => bool) public isEpochExpired;
+    /// @notice Is vault ready for next epoch
+    /// @dev epoch => whether the vault is ready (boostrapped)
+    mapping(uint256 => bool) public isVaultReady;
+
     // Mapping of strikes for each epoch
     mapping(uint256 => uint256[]) public epochStrikes;
     // Mapping of (epoch => (strike => tokens))
@@ -166,49 +175,79 @@ contract Vault is Ownable {
         priceOracleAggregator = IPriceOracleAggregator(_priceOracleAggregator);
     }
 
+    /// @notice Sets the current epoch as expired.
+    /// @return Whether expire was successful
+    function expireEpoch() external onlyOwner returns (bool) {
+        // Epoch must not be expired
+        require(!isEpochExpired[currentEpoch], "Epoch set as expired");
+
+        (, uint256 epochExpiry) = getEpochTimes(currentEpoch);
+        // Current timestamp should be past expiry
+        require(
+            (block.timestamp > epochExpiry),
+            "Cannot expire epoch before epoch's expiry"
+        );
+
+        isEpochExpired[currentEpoch] = true;
+
+        return true;
+    }
+
     /**
      * Bootstraps a new epoch and mints option tokens equivalent to user deposits for the epoch
      * @return Whether bootstrap was successful
      */
-    function bootstrap() public onlyOwner returns (bool) {
+    function bootstrap() external onlyOwner returns (bool) {
+        uint256 nextEpoch = currentEpoch + 1;
+        // Vault must not be ready
+        require(!isVaultReady[nextEpoch], "Vault already bootstrapped");
+        // Next epoch strike must be set
         require(
-            epochStrikes[epoch + 1].length > 0,
+            epochStrikes[nextEpoch].length > 0,
             "Strikes have not been set for next epoch"
         );
-        require(
-            getCurrentMonthlyEpoch() == epoch + 1,
-            "Epoch hasn't completed yet"
-        );
-        if (epoch == 0) {
-            epochInitTime = block.timestamp;
-        } else {
-            // Unstake all tokens from previous epoch
-            stakingRewards.withdraw(stakingRewards.balanceOf(address(this)));
-            // Claim DPX and RDPX rewards
-            stakingRewards.getReward(2);
-            // Update final dpx and rdpx balances for epoch
-            totalEpochDpxBalance[epoch] = dpx.balanceOf(address(this));
-            totalEpochRdpxBalance[epoch] = rdpx.balanceOf(address(this));
+
+        if (currentEpoch > 0) {
+            // Previous epoch must be expired
+            require(
+                isEpochExpired[currentEpoch],
+                "Previous epoch has not expired"
+            );
         }
-        for (uint256 i = 0; i < epochStrikes[epoch + 1].length; i++) {
-            uint256 strike = epochStrikes[epoch + 1][i];
+
+        // Unstake all tokens from previous epoch
+        stakingRewards.withdraw(stakingRewards.balanceOf(address(this)));
+        // Claim DPX and RDPX rewards
+        stakingRewards.getReward(2);
+        // Update final dpx and rdpx balances for epoch
+        totalEpochDpxBalance[currentEpoch] = dpx.balanceOf(address(this));
+        totalEpochRdpxBalance[currentEpoch] = rdpx.balanceOf(address(this));
+
+        for (uint256 i = 0; i < epochStrikes[nextEpoch].length; i++) {
+            uint256 strike = epochStrikes[nextEpoch][i];
             string memory name = concatenate("DPX-CALL", strike.toString());
             name = concatenate(name, "-EPOCH-");
-            name = concatenate(name, (epoch + 1).toString());
+            name = concatenate(name, (nextEpoch).toString());
             // Create doTokens representing calls for selected strike in epoch
             ERC20PresetMinterPauser _erc20 = new ERC20PresetMinterPauser(
                 name,
                 name
             );
-            epochStrikeTokens[epoch + 1][strike] = address(_erc20);
+            epochStrikeTokens[nextEpoch][strike] = address(_erc20);
             // Mint tokens equivalent to deposits for strike in epoch
             _erc20.mint(
                 address(this),
-                totalEpochStrikeDeposits[epoch + 1][strike]
+                totalEpochStrikeDeposits[nextEpoch][strike]
             );
         }
-        epoch += 1;
-        emit LogBootstrap(epoch);
+
+        // Mark vault as ready for epoch
+        isVaultReady[nextEpoch] = true;
+        // Increase the current epoch
+        currentEpoch = nextEpoch;
+
+        emit LogBootstrap(nextEpoch);
+
         return true;
     }
 
@@ -222,9 +261,14 @@ contract Vault is Ownable {
         onlyOwner
         returns (bool)
     {
-        epochStrikes[epoch + 1] = strikes;
+        uint256 nextEpoch = currentEpoch + 1;
+        // Set the next epoch strikes
+        epochStrikes[nextEpoch] = strikes;
+        // Set the next epoch start time
+        epochStartTimes[nextEpoch] = block.timestamp;
+
         for (uint256 i = 0; i < strikes.length; i++)
-            emit LogNewStrike(epoch + 1, strikes[i]);
+            emit LogNewStrike(nextEpoch, strikes[i]);
         return true;
     }
 
@@ -238,9 +282,10 @@ contract Vault is Ownable {
         public
         returns (bool)
     {
+        uint256 nextEpoch = currentEpoch + 1;
         // Must be a valid strikeIndex
         require(
-            strikeIndex < epochStrikes[epoch + 1].length,
+            strikeIndex < epochStrikes[nextEpoch].length,
             "Invalid strike index"
         );
 
@@ -248,7 +293,7 @@ contract Vault is Ownable {
         require(amount > 0, "Invalid amount");
 
         // Must be a valid strike
-        uint256 strike = epochStrikes[epoch + 1][strikeIndex];
+        uint256 strike = epochStrikes[nextEpoch][strikeIndex];
         require(strike != 0, "Invalid strike");
 
         bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
@@ -257,16 +302,16 @@ contract Vault is Ownable {
         dpx.transferFrom(msg.sender, address(this), amount);
 
         // Add to user epoch deposits
-        userEpochDeposits[epoch + 1][userStrike] += amount;
+        userEpochDeposits[nextEpoch][userStrike] += amount;
         // Add to total epoch strike deposits
-        totalEpochStrikeDeposits[epoch + 1][strike] += amount;
+        totalEpochStrikeDeposits[nextEpoch][strike] += amount;
         // Add to total epoch deposits
-        totalEpochDeposits[epoch + 1] += amount;
+        totalEpochDeposits[nextEpoch] += amount;
         // Deposit into staking rewards
         dpx.approve(address(stakingRewards), amount);
         stakingRewards.stake(amount);
 
-        emit LogNewDeposit(epoch + 1, strike, msg.sender);
+        emit LogNewDeposit(nextEpoch, strike, msg.sender);
 
         return true;
     }
@@ -285,6 +330,7 @@ contract Vault is Ownable {
             strikeIndices.length == amounts.length,
             "Invalid strikeIndices/amounts"
         );
+
         for (uint256 i = 0; i < strikeIndices.length; i++)
             deposit(strikeIndices[i], amounts[i]);
         return true;
@@ -302,55 +348,53 @@ contract Vault is Ownable {
     {
         // Must be a valid strikeIndex
         require(
-            strikeIndex < epochStrikes[epoch].length,
+            strikeIndex < epochStrikes[currentEpoch].length,
             "Invalid strike index"
         );
 
         // Must positive amount
         require(amount > 0, "Invalid amount");
 
-        // Must be bootstrapped
-        require(
-            getCurrentMonthlyEpoch() == epoch,
-            "Epoch hasn't been bootstrapped"
-        );
-
         // Must be a valid strike
-        uint256 strike = epochStrikes[epoch][strikeIndex];
+        uint256 strike = epochStrikes[currentEpoch][strikeIndex];
         require(strike != 0, "Invalid strike");
 
         // Must deposit enough by user
         bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
         require(
-            userEpochCallsPurchased[epoch][userStrike] + amount <=
-                userEpochDeposits[epoch][userStrike],
+            userEpochCallsPurchased[currentEpoch][userStrike] + amount <=
+                userEpochDeposits[currentEpoch][userStrike],
             "User didn't deposit enough for purchase"
         );
 
         // Transfer doTokens to user
-        IERC20(epochStrikeTokens[epoch][strike]).transfer(msg.sender, amount);
+        IERC20(epochStrikeTokens[currentEpoch][strike]).transfer(
+            msg.sender,
+            amount
+        );
 
         // Get total premium for all calls being purchased
         uint256 premium = optionPricing
-        .getOptionPrice(
-            false,
-            getMonthlyExpiryFromTimestamp(block.timestamp),
-            strike
-        ).mul(amount)
-        .div(getUsdPrice(address(dpx)));
+            .getOptionPrice(
+                false,
+                getMonthlyExpiryFromTimestamp(block.timestamp),
+                strike
+            )
+            .mul(amount)
+            .div(getUsdPrice(address(dpx)));
         // Transfer usd equivalent to premium from user
         dpx.transferFrom(msg.sender, address(this), premium);
 
         // Add to total epoch calls purchased
-        totalEpochCallsPurchased[epoch][strike] += amount;
+        totalEpochCallsPurchased[currentEpoch][strike] += amount;
         // Add to user epoch calls purchased
-        userEpochCallsPurchased[epoch][userStrike] += amount;
+        userEpochCallsPurchased[currentEpoch][userStrike] += amount;
         // Add to total epoch premium
-        totalEpochPremium[epoch][strike] += premium;
+        totalEpochPremium[currentEpoch][strike] += premium;
         // Add to user epoch premium
-        userEpochPremium[epoch][userStrike] += premium;
+        userEpochPremium[currentEpoch][userStrike] += premium;
 
-        emit LogNewPurchase(epoch, strike, msg.sender, amount, premium);
+        emit LogNewPurchase(currentEpoch, strike, msg.sender, amount, premium);
 
         return true;
     }
@@ -371,7 +415,7 @@ contract Vault is Ownable {
     ) public returns (bool) {
         // Must be a past epoch
         require(
-            exerciseEpoch < epoch && epoch == getCurrentMonthlyEpoch(),
+            exerciseEpoch < currentEpoch,
             "Exercise epoch must be in the past"
         );
 
@@ -416,7 +460,7 @@ contract Vault is Ownable {
         // Transfer PnL to user
         dpx.safeTransfer(user, PnL);
 
-        emit LogNewExercise(epoch, strike, user, amount, PnL);
+        emit LogNewExercise(exerciseEpoch, strike, user, amount, PnL);
 
         return true;
     }
@@ -426,22 +470,19 @@ contract Vault is Ownable {
      * @return Whether compound was successful
      */
     function compound() public returns (bool) {
-        // Must be bootstrapped
-        require(
-            getCurrentMonthlyEpoch() == epoch,
-            "Epoch hasn't been bootstrapped"
-        );
         uint256 oldBalance = stakingRewards.balanceOf(address(this));
         uint256 rewards = stakingRewards.rewardsDPX(address(this));
         // Compound staking rewards
         stakingRewards.compound();
         // Update epoch balance
-        totalEpochDpxBalance[epoch] = stakingRewards.balanceOf(address(this));
+        totalEpochDpxBalance[currentEpoch] = stakingRewards.balanceOf(
+            address(this)
+        );
         emit LogCompound(
-            epoch,
+            currentEpoch,
             rewards,
             oldBalance,
-            totalEpochDpxBalance[epoch]
+            totalEpochDpxBalance[currentEpoch]
         );
 
         return true;
@@ -459,7 +500,7 @@ contract Vault is Ownable {
     {
         // Must be a past epoch
         require(
-            withdrawEpoch < epoch && epoch == getCurrentMonthlyEpoch(),
+            withdrawEpoch < currentEpoch,
             "Withdraw epoch must be in the past"
         );
 
@@ -499,68 +540,6 @@ contract Vault is Ownable {
         return true;
     }
 
-    /**
-     * Returns start and end times for an epoch
-     * @param epoch Target epoch
-     * @param timePeriod Time period of the epoch (7 days or 28 days)
-     */
-    function getEpochTimes(uint256 epoch, uint256 timePeriod)
-        external
-        view
-        returns (uint256 start, uint256 end)
-    {
-        if (timePeriod == 7 days) {
-            if (epoch == 1) {
-                return (
-                    epochInitTime,
-                    getWeeklyExpiryFromTimestamp(epochInitTime)
-                );
-            } else {
-                uint256 _start = getWeeklyExpiryFromTimestamp(epochInitTime) +
-                    (timePeriod * (epoch - 2));
-                return (_start, _start + timePeriod);
-            }
-        } else if (timePeriod == 28 days) {
-            if (epoch == 1) {
-                return (
-                    epochInitTime,
-                    getMonthlyExpiryFromTimestamp(epochInitTime)
-                );
-            } else {
-                uint256 _start = getMonthlyExpiryFromTimestamp(epochInitTime) +
-                    (timePeriod * (epoch - 2));
-                return (_start, _start + timePeriod);
-            }
-        }
-    }
-
-    /*=== PURE FUNCTIONS ====*/
-
-    /// @notice Calculates next available Friday expiry from a solidity date
-    /// @param timestamp Timestamp from which the friday expiry is to be calculated
-    /// @return The friday expiry
-    function getWeeklyExpiryFromTimestamp(uint256 timestamp)
-        public
-        pure
-        returns (uint256)
-    {
-        // Use friday as 1-index
-        uint256 dayOfWeek = BokkyPooBahsDateTimeLibrary.getDayOfWeek(
-            timestamp,
-            6
-        );
-        uint256 nextFriday = timestamp + ((7 - dayOfWeek + 1) * 1 days);
-        return
-            BokkyPooBahsDateTimeLibrary.timestampFromDateTime(
-                nextFriday.getYear(),
-                nextFriday.getMonth(),
-                nextFriday.getDay(),
-                12,
-                0,
-                0
-            );
-    }
-
     /// @notice Calculates the monthly expiry from a solidity date
     /// @param timestamp Timestamp from which the monthly expiry is to be calculated
     /// @return The monthly expiry
@@ -584,14 +563,14 @@ contract Vault is Ownable {
         }
 
         uint256 lastFridayOfMonth = BokkyPooBahsDateTimeLibrary
-        .timestampFromDateTime(
-            lastDay.getYear(),
-            lastDay.getMonth(),
-            lastDay.getDay() - (lastDay.getDayOfWeek() - 5),
-            12,
-            0,
-            0
-        );
+            .timestampFromDateTime(
+                lastDay.getYear(),
+                lastDay.getMonth(),
+                lastDay.getDay() - (lastDay.getDayOfWeek() - 5),
+                12,
+                0,
+                0
+            );
 
         if (lastFridayOfMonth <= timestamp) {
             uint256 temp = BokkyPooBahsDateTimeLibrary.timestampFromDate(
@@ -609,57 +588,33 @@ contract Vault is Ownable {
             }
 
             lastFridayOfMonth = BokkyPooBahsDateTimeLibrary
-            .timestampFromDateTime(
-                temp.getYear(),
-                temp.getMonth(),
-                temp.getDay() - (temp.getDayOfWeek() - 5),
-                12,
-                0,
-                0
-            );
+                .timestampFromDateTime(
+                    temp.getYear(),
+                    temp.getMonth(),
+                    temp.getDay() - (temp.getDayOfWeek() - 5),
+                    12,
+                    0,
+                    0
+                );
         }
         return lastFridayOfMonth;
     }
 
     /**
-     * @notice Returns the current epoch based on the epoch init time and a 4 week time period
-     * @dev Epochs are 1-indexed
-     * @return Current monthly epoch number
+     * Returns start and end times for an epoch
+     * @param epoch Target epoch
      */
-    function getCurrentMonthlyEpoch() public view returns (uint256) {
-        if (block.timestamp < epochInitTime) return 0;
-        if (epochInitTime == 0) return 1;
-        /**
-         * Monthly Epoch = ((Current time - Init time) / 28 days) + 1
-         * The current time is adjust to account for any 'init time' by adding to it the difference
-         * between the init time and the first expiry.
-         * Current time = block.timestamp - (28 days - (The first expiry - init time))
-         */
-        return
-            (((block.timestamp +
-                (28 days -
-                    (getMonthlyExpiryFromTimestamp(epochInitTime) -
-                        epochInitTime))) - epochInitTime) / (28 days)) + 1;
-    }
+    function getEpochTimes(uint256 epoch)
+        public
+        view
+        returns (uint256 start, uint256 end)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
 
-    /**
-     * @notice Returns the current epoch based on the epoch init time and a 1 week time period
-     * @dev Epochs are 1-indexed
-     * @return Current weekly epoch number
-     */
-    function getCurrentWeeklyEpoch() external view returns (uint256) {
-        if (block.timestamp < epochInitTime) return 0;
-        /**
-         * Weekly Epoch = ((Current time - Init time) / 7 days) + 1
-         * The current time is adjust to account for any 'init time' by adding to it the difference
-         * between the init time and the first expiry.
-         * Current time = block.timestamp - (7 days - (The first expiry - init time))
-         */
-        return
-            (((block.timestamp +
-                (7 days -
-                    (getWeeklyExpiryFromTimestamp(epochInitTime) -
-                        epochInitTime))) - epochInitTime) / (7 days)) + 1;
+        return (
+            epochStartTimes[epoch],
+            getMonthlyExpiryFromTimestamp(epochStartTimes[epoch])
+        );
     }
 
     function concatenate(string memory a, string memory b)
