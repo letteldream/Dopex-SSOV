@@ -566,7 +566,7 @@ contract Vault is Ownable {
             .timestampFromDateTime(
                 lastDay.getYear(),
                 lastDay.getMonth(),
-                lastDay.getDay() - (lastDay.getDayOfWeek() - 5),
+                lastDay.getDay() + 5 - lastDay.getDayOfWeek(),
                 12,
                 0,
                 0
@@ -591,7 +591,7 @@ contract Vault is Ownable {
                 .timestampFromDateTime(
                     temp.getYear(),
                     temp.getMonth(),
-                    temp.getDay() - (temp.getDayOfWeek() - 5),
+                    temp.getDay() + 5 - temp.getDayOfWeek(),
                     12,
                     0,
                     0
