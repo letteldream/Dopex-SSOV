@@ -213,15 +213,15 @@ contract Vault is Ownable {
                 isEpochExpired[currentEpoch],
                 "Previous epoch has not expired"
             );
-        }
 
-        // Unstake all tokens from previous epoch
-        stakingRewards.withdraw(stakingRewards.balanceOf(address(this)));
-        // Claim DPX and RDPX rewards
-        stakingRewards.getReward(2);
-        // Update final dpx and rdpx balances for epoch
-        totalEpochDpxBalance[currentEpoch] = dpx.balanceOf(address(this));
-        totalEpochRdpxBalance[currentEpoch] = rdpx.balanceOf(address(this));
+            // Unstake all tokens from previous epoch
+            stakingRewards.withdraw(stakingRewards.balanceOf(address(this)));
+            // Claim DPX and RDPX rewards
+            stakingRewards.getReward(2);
+            // Update final dpx and rdpx balances for epoch
+            totalEpochDpxBalance[currentEpoch] = dpx.balanceOf(address(this));
+            totalEpochRdpxBalance[currentEpoch] = rdpx.balanceOf(address(this));
+        }
 
         for (uint256 i = 0; i < epochStrikes[nextEpoch].length; i++) {
             uint256 strike = epochStrikes[nextEpoch][i];
@@ -346,6 +346,10 @@ contract Vault is Ownable {
         public
         returns (bool)
     {
+        if (currentEpoch == 0) {
+            return false;
+        }
+
         // Must be a valid strikeIndex
         require(
             strikeIndex < epochStrikes[currentEpoch].length,
@@ -470,6 +474,10 @@ contract Vault is Ownable {
      * @return Whether compound was successful
      */
     function compound() public returns (bool) {
+        if (currentEpoch == 0) {
+            return false;
+        }
+
         uint256 oldBalance = stakingRewards.balanceOf(address(this));
         uint256 rewards = stakingRewards.rewardsDPX(address(this));
         // Compound staking rewards
