@@ -21,7 +21,7 @@ export const priceFeedAddresses = {
   },
 };
 
-export const dpxHolders = ["0x60aD50E7D5dBb92da6E01f933a4f913e4D9A4535", "0x59c4700d7f3716F949b5e2aF1cA0F28103E82a0F", "0x9efEC2dE6dD2060D920867dE68704d5dFd218A90"];
+export const dpxHolders = ["0x60aD50E7D5dBb92da6E01f933a4f913e4D9A4535", "0x2d31842b18e5d329cc4b4eba7e7e15b67cd6556a", "0xbb1df48eec69898a80533624d47ad32d36543bca"];
 export const dpx = "0xeec2be5c91ae7f8a338e1e5f3b5de49d07afdc81";
 export const rdpx = "0x0ff5a8451a839f5f0bb3562689d9a44089738d11";
 export const stakingRewards = "0xce4d3e893f060cb14b550b3e6b0ad512bef30995";
