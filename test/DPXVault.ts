@@ -121,7 +121,7 @@ describe("Vault test", async () => {
     it("Deposit single & userEpochDeposits/totalEpochStrikeDeposits/totalEpochDeposits", async () => {
         const amount0 = expandTo18Decimals(10);
         const user0Address = await user0.getAddress();
-        const epoch = (await vault.epoch()).add(1);
+        const epoch = (await vault.currentEpoch()).add(1);
         const strike = await vault.epochStrikes(epoch, 0);
         const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user0Address, strike]);
 
@@ -180,9 +180,9 @@ describe("Vault test", async () => {
 
     // Bootstrap EpochStrikeTokens
     it("Bootstrap EpochStrikeTokens name/symbol/amount", async () => {
-        const pastEpoch = await vault.epoch();
+        const pastEpoch = await vault.currentEpoch();
         await vault.connect(owner).bootstrap();
-        const currentEpoch = await vault.epoch();
+        const currentEpoch = await vault.currentEpoch();
         expect(currentEpoch).to.equal(pastEpoch.add(1));
         for (let i = 0; i < 3; i++) {
             const epochStrikeTokenAddress = await vault.epochStrikeTokens(currentEpoch, strikes[i]);
@@ -195,24 +195,67 @@ describe("Vault test", async () => {
             expect(await epochStrikeToken.balanceOf(vault.address)).to.equal(await vault.totalEpochStrikeDeposits(currentEpoch, strikes[i]))
         }
     })
+
+    // Bootsrap with not expired previous epoch
+    it("Bootstrap with not expired previous epoch", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        // Set Strikes & Bootstrap
+        await vault.connect(owner).setStrikes(strikes);
+        await expect(vault.connect(owner).bootstrap()).to.be.revertedWith("Previous epoch has not expired");
+
+        timeTravel(-24 * 60 * 60 * 30);
+    })
+  });
+
+  // Expire
+  describe("Expire", async () => {
+
+    // Expire OnlyOwner
+    it("Expire OnlyOwner", async () => {
+        await expect(vault.connect(user0).expireEpoch()).to.be.revertedWith("Ownable: caller is not the owner");
+    })
+
+    // Expire before epoch's expiry
+    it("Expire before epoch's expiry", async () => {
+        await expect(vault.connect(owner).expireEpoch()).to.be.revertedWith("Cannot expire epoch before epoch's expiry");
+    })
+
+    // Expire 1st epoch
+    it("Expire 1st epoch", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        await vault.connect(owner).expireEpoch();
+
+        timeTravel(-24 * 60 * 60 * 30);
+    })
+
+    // Expire 1st epoch again
+    it("Expire 1st epoch again", async () => {
+        timeTravel(24 * 60 * 60 * 30);
+
+        await expect(vault.connect(owner).expireEpoch()).to.be.revertedWith("Epoch set as expired");
+
+        timeTravel(-24 * 60 * 60 * 30);
+    })
   });
 
   // Compound
   describe("Compound", async () => {
 
     // Compound un-bootstrapped epoch
-    it("Compound un-bootstrapped epoch", async () => {
-        timeTravel(24 * 60 * 60 * 30);
+    // it("Compound un-bootstrapped epoch", async () => {
+    //     timeTravel(24 * 60 * 60 * 30);
 
-        // Purchase before bootstrap
-        await expect(vault.connect(user0).compound()).to.be.revertedWith("Epoch hasn't been bootstrapped");
+    //     // Purchase before bootstrap
+    //     await expect(vault.connect(user0).compound()).to.be.revertedWith("Epoch hasn't been bootstrapped");
 
-        timeTravel(-24 * 60 * 60 * 30);
-    });
+    //     timeTravel(-24 * 60 * 60 * 30);
+    // });
 
     // Compound
     it("Compound by any user", async () => {
-        const epoch = await vault.epoch();
+        const epoch = await vault.currentEpoch();
 
         await expect(vault.connect(user2).compound()).to.emit(vault, "LogCompound");
 
@@ -233,22 +276,22 @@ describe("Vault test", async () => {
     });
 
     // Purchase un-bootstrapped epoch
-    it("Purchase un-bootstrapped epoch", async () => {
-        timeTravel(24 * 60 * 60 * 30);
+    // it("Purchase un-bootstrapped epoch", async () => {
+    //     timeTravel(24 * 60 * 60 * 30);
         
-        // Set Strikes
-        await vault.connect(owner).setStrikes(strikes);
+    //     // Set Strikes
+    //     await vault.connect(owner).setStrikes(strikes);
         
-        // Deposit
-        const amount0 = expandTo18Decimals(10);
-        await dpxToken.connect(user0).approve(vault.address, amount0);
-        await vault.connect(user0).deposit(0, amount0);
+    //     // Deposit
+    //     const amount0 = expandTo18Decimals(10);
+    //     await dpxToken.connect(user0).approve(vault.address, amount0);
+    //     await vault.connect(user0).deposit(0, amount0);
 
-        // Purchase before bootstrap
-        await expect(vault.connect(user0).purchase(0, amount0)).to.be.revertedWith("Epoch hasn't been bootstrapped");
+    //     // Purchase before bootstrap
+    //     await expect(vault.connect(user0).purchase(0, amount0)).to.be.revertedWith("Epoch hasn't been bootstrapped");
 
-        timeTravel(-24 * 60 * 60 * 30);
-    })
+    //     timeTravel(-24 * 60 * 60 * 30);
+    // })
 
     // Purchase exceeds the deposit amount
     it("Purhcase exceeds the deposit amount", async () => {
@@ -259,7 +302,7 @@ describe("Vault test", async () => {
     it("Purchase by user0", async () => {
         const amount = expandTo18Decimals(5);
         const user0Address = await user0.getAddress();
-        const epoch = await vault.epoch();
+        const epoch = await vault.currentEpoch();
         const strike = await vault.epochStrikes(epoch, 0);
         const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user0Address, strike]);
         const block = await ethers.provider.getBlock(await ethers.provider.getBlockNumber());
@@ -314,7 +357,7 @@ describe("Vault test", async () => {
     it("Purchase by user1", async () => {
         const amount = expandTo18Decimals(10);
         const user1Address = await user1.getAddress();
-        const epoch = await vault.epoch();
+        const epoch = await vault.currentEpoch();
         const strike = await vault.epochStrikes(epoch, 1);
         const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user1Address, strike]);
         const block = await ethers.provider.getBlock(await ethers.provider.getBlockNumber());
@@ -379,7 +422,7 @@ describe("Vault test", async () => {
         await vault.connect(owner).bootstrap();
 
         const user0Address = await user0.getAddress()
-        const epoch = (await vault.epoch()).sub(1)
+        const epoch = (await vault.currentEpoch()).sub(1)
 
         await expect(vault.connect(user0).exercise(epoch, 4, 10, user0Address)).to.be.revertedWith("Invalid strike index")
         await expect(vault.connect(user0).exercise(epoch, 3, 10, user0Address)).to.be.revertedWith("Invalid strike")
@@ -391,7 +434,7 @@ describe("Vault test", async () => {
     // Exercise not past epoch
     it("Exercise not past epoch", async () => {
         const user0Address = await user0.getAddress()
-        const epoch = await vault.epoch()
+        const epoch = await vault.currentEpoch()
 
         await expect(vault.connect(user0).exercise(epoch, 0, 1, user0Address)).to.be.revertedWith("Exercise epoch must be in the past")
 
@@ -408,7 +451,7 @@ describe("Vault test", async () => {
         timeTravel(24 * 60 * 60 * 30);
 
         const user0Address = await user0.getAddress()
-        const epoch = (await vault.epoch()).sub(1)
+        const epoch = (await vault.currentEpoch()).sub(1)
         const amount = expandTo18Decimals(2);
         const strike = await vault.epochStrikes(epoch, 0);
         const usdPrice = await vault.viewUsdPrice(dpxToken.address);
@@ -453,7 +496,7 @@ describe("Vault test", async () => {
         timeTravel(24 * 60 * 60 * 30);
 
         const user1Address = await user1.getAddress()
-        const epoch = (await vault.epoch()).sub(1)
+        const epoch = (await vault.currentEpoch()).sub(1)
         const amount = expandTo18Decimals(2);
 
         await expect(vault.connect(user1).exercise(epoch, 0, 1, user1Address)).to.be.revertedWith("Option token balance is not enough")
@@ -469,7 +512,7 @@ describe("Vault test", async () => {
     it("WithdrawForStrike Invalid Strike", async () => {
         timeTravel(24 * 60 * 60 * 30);
 
-        const epoch = (await vault.epoch()).sub(1)
+        const epoch = (await vault.currentEpoch()).sub(1)
 
         await expect(vault.connect(user0).withdrawForStrike(epoch, 4)).to.be.revertedWith("Invalid strike index")
         await expect(vault.connect(user0).withdrawForStrike(epoch, 3)).to.be.revertedWith("Invalid strike")
@@ -479,7 +522,7 @@ describe("Vault test", async () => {
 
     // WithdrawForStrike not past epoch
     it("WithdrawForStrike not past epoch", async () => {
-        const epoch = await vault.epoch()
+        const epoch = await vault.currentEpoch()
 
         await expect(vault.connect(user0).withdrawForStrike(epoch, 0)).to.be.revertedWith("Withdraw epoch must be in the past")
 
@@ -496,7 +539,7 @@ describe("Vault test", async () => {
         timeTravel(24 * 60 * 60 * 30);
 
         const user0Address = await user0.getAddress()
-        const epoch = (await vault.epoch()).sub(1)
+        const epoch = (await vault.currentEpoch()).sub(1)
         const strike = await vault.epochStrikes(epoch, 0);
         const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user0Address, strike]);
 
@@ -530,7 +573,7 @@ describe("Vault test", async () => {
         timeTravel(24 * 60 * 60 * 30);
 
         const user1Address = await user1.getAddress()
-        const epoch = (await vault.epoch()).sub(1)
+        const epoch = (await vault.currentEpoch()).sub(1)
         const strike = await vault.epochStrikes(epoch, 1);
         const userStrike = ethers.utils.solidityKeccak256(["address", "uint256"], [user1Address, strike]);
 
@@ -563,7 +606,7 @@ describe("Vault test", async () => {
     it("WithdrawForStrike by user2", async () => {
         timeTravel(24 * 60 * 60 * 30);
 
-        const epoch = (await vault.epoch()).sub(1)
+        const epoch = (await vault.currentEpoch()).sub(1)
 
         await expect(vault.connect(user2).withdrawForStrike(epoch, 1)).to.be.revertedWith("User strike deposit amount must be greater than zero")
         
