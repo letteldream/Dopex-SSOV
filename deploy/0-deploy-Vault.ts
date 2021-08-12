@@ -18,7 +18,6 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
   const stakingRewardsAddress = stakingRewards[chainId]
   const optionPricingAddress = optionPricing[chainId]
 
-  console.log('111000000>>>>>', deployer, chainId)
   if (
     !network ||
     !dpxAddress ||
