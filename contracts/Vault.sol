@@ -651,7 +651,7 @@ contract Vault is Ownable {
         require(epoch > 0, "Epoch passed must be higher than 0");
 
         uint256 length = epochStrikes[epoch].length;
-        address[] memory _epochStrikeTokens;
+        address[] memory _epochStrikeTokens = new address[](length);
 
         for (uint256 i = 0; i < length; i++) {
             _epochStrikeTokens[i] = epochStrikeTokens[epoch][
@@ -674,7 +674,7 @@ contract Vault is Ownable {
         require(epoch > 0, "Epoch passed must be higher than 0");
 
         uint256 length = epochStrikes[epoch].length;
-        uint256[] memory _totalEpochStrikeDeposits;
+        uint256[] memory _totalEpochStrikeDeposits = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
             _totalEpochStrikeDeposits[i] = totalEpochStrikeDeposits[epoch][
@@ -698,7 +698,7 @@ contract Vault is Ownable {
         require(epoch > 0, "Epoch passed must be higher than 0");
 
         uint256 length = epochStrikes[epoch].length;
-        uint256[] memory _userEpochDeposits;
+        uint256[] memory _userEpochDeposits = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
             uint256 strike = epochStrikes[epoch][i];
@@ -722,7 +722,7 @@ contract Vault is Ownable {
         require(epoch > 0, "Epoch passed must be higher than 0");
 
         uint256 length = epochStrikes[epoch].length;
-        uint256[] memory _totalEpochCallsPurchased;
+        uint256[] memory _totalEpochCallsPurchased = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
             _totalEpochCallsPurchased[i] = totalEpochCallsPurchased[epoch][
@@ -746,7 +746,7 @@ contract Vault is Ownable {
         require(epoch > 0, "Epoch passed must be higher than 0");
 
         uint256 length = epochStrikes[epoch].length;
-        uint256[] memory _userEpochCallsPurchased;
+        uint256[] memory _userEpochCallsPurchased = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
             uint256 strike = epochStrikes[epoch][i];
@@ -772,7 +772,7 @@ contract Vault is Ownable {
         require(epoch > 0, "Epoch passed must be higher than 0");
 
         uint256 length = epochStrikes[epoch].length;
-        uint256[] memory _totalEpochPremium;
+        uint256[] memory _totalEpochPremium = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
             _totalEpochPremium[i] = totalEpochPremium[epoch][
@@ -796,7 +796,7 @@ contract Vault is Ownable {
         require(epoch > 0, "Epoch passed must be higher than 0");
 
         uint256 length = epochStrikes[epoch].length;
-        uint256[] memory _userEpochPremium;
+        uint256[] memory _userEpochPremium = new uint256[](length);
 
         for (uint256 i = 0; i < length; i++) {
             uint256 strike = epochStrikes[epoch][i];
