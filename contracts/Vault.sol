@@ -625,19 +625,210 @@ contract Vault is Ownable {
         );
     }
 
+    /**
+     * Returns epoch strikes array for an epoch
+     * @param epoch Target epoch
+     */
+    function getEpochStrikes(uint256 epoch)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        return epochStrikes[epoch];
+    }
+
+    /**
+     * Returns epoch strike tokens array for an epoch
+     * @param epoch Target epoch
+     */
+    function getEpochStrikeTokens(uint256 epoch)
+        public
+        view
+        returns (address[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        uint256 length = epochStrikes[epoch].length;
+        address[] memory _epochStrikeTokens = new address[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            _epochStrikeTokens[i] = epochStrikeTokens[epoch][
+                epochStrikes[epoch][i]
+            ];
+        }
+
+        return _epochStrikeTokens;
+    }
+
+    /**
+     * Returns total epoch strike deposits array for an epoch
+     * @param epoch Target epoch
+     */
+    function getTotalEpochStrikeDeposits(uint256 epoch)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        uint256 length = epochStrikes[epoch].length;
+        uint256[] memory _totalEpochStrikeDeposits = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            _totalEpochStrikeDeposits[i] = totalEpochStrikeDeposits[epoch][
+                epochStrikes[epoch][i]
+            ];
+        }
+
+        return _totalEpochStrikeDeposits;
+    }
+
+    /**
+     * Returns user epoch deposits array for an epoch
+     * @param epoch Target epoch
+     * @param user Address of the user
+     */
+    function getUserEpochDeposits(uint256 epoch, address user)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        uint256 length = epochStrikes[epoch].length;
+        uint256[] memory _userEpochDeposits = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 strike = epochStrikes[epoch][i];
+            bytes32 userStrike = keccak256(abi.encodePacked(user, strike));
+
+            _userEpochDeposits[i] = userEpochDeposits[epoch][userStrike];
+        }
+
+        return _userEpochDeposits;
+    }
+
+    /**
+     * Returns total epoch calls purchased array for an epoch
+     * @param epoch Target epoch
+     */
+    function getTotalEpochCallsPurchased(uint256 epoch)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        uint256 length = epochStrikes[epoch].length;
+        uint256[] memory _totalEpochCallsPurchased = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            _totalEpochCallsPurchased[i] = totalEpochCallsPurchased[epoch][
+                epochStrikes[epoch][i]
+            ];
+        }
+
+        return _totalEpochCallsPurchased;
+    }
+
+    /**
+     * Returns user epoch calls purchased array for an epoch
+     * @param epoch Target epoch
+     * @param user Address of the user
+     */
+    function getUserEpochCallsPurchased(uint256 epoch, address user)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        uint256 length = epochStrikes[epoch].length;
+        uint256[] memory _userEpochCallsPurchased = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 strike = epochStrikes[epoch][i];
+            bytes32 userStrike = keccak256(abi.encodePacked(user, strike));
+
+            _userEpochCallsPurchased[i] = userEpochCallsPurchased[epoch][
+                userStrike
+            ];
+        }
+
+        return _userEpochCallsPurchased;
+    }
+
+    /**
+     * Returns total epoch premium array for an epoch
+     * @param epoch Target epoch
+     */
+    function getTotalEpochPremium(uint256 epoch)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        uint256 length = epochStrikes[epoch].length;
+        uint256[] memory _totalEpochPremium = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            _totalEpochPremium[i] = totalEpochPremium[epoch][
+                epochStrikes[epoch][i]
+            ];
+        }
+
+        return _totalEpochPremium;
+    }
+
+    /**
+     * Returns user epoch premium array for an epoch
+     * @param epoch Target epoch
+     * @param user Address of the user
+     */
+    function getUserEpochPremium(uint256 epoch, address user)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        require(epoch > 0, "Epoch passed must be higher than 0");
+
+        uint256 length = epochStrikes[epoch].length;
+        uint256[] memory _userEpochPremium = new uint256[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 strike = epochStrikes[epoch][i];
+            bytes32 userStrike = keccak256(abi.encodePacked(user, strike));
+
+            _userEpochPremium[i] = userEpochPremium[epoch][userStrike];
+        }
+
+        return _userEpochPremium;
+    }
+
+    /**
+     * Update & Returns token's price in USD
+     * @param _token Address of the token
+     */
+    function getUsdPrice(address _token) public returns (uint256) {
+        return priceOracleAggregator.getPriceInUSD(_token);
+    }
+
+    /**
+     * Returns token's price in USD
+     * @param _token Address of the token
+     */
+    function viewUsdPrice(address _token) public view returns (uint256) {
+        return priceOracleAggregator.viewPriceInUSD(_token);
+    }
+
     function concatenate(string memory a, string memory b)
         internal
         pure
         returns (string memory)
     {
         return string(abi.encodePacked(a, b));
-    }
-
-    function getUsdPrice(address _token) public returns (uint256) {
-        return priceOracleAggregator.getPriceInUSD(_token);
-    }
-
-    function viewUsdPrice(address _token) public view returns (uint256) {
-        return priceOracleAggregator.viewPriceInUSD(_token);
     }
 }
