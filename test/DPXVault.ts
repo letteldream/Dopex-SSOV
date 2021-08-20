@@ -14,6 +14,7 @@ import { dpxHolders, dpx, dpxTokenAbi, rdpx, rdpxTokenAbi, stakingRewards, staki
 import { Vault, MockOptionPricing } from '../types';
 
 describe("Vault test", async () => {
+  let chainId: number;
   let signers: SignerWithAddress[];
   let owner: SignerWithAddress;
   let user0: Signer;
@@ -30,6 +31,7 @@ describe("Vault test", async () => {
   before(async () => {
     signers = await ethers.getSigners();
     owner = signers[0];
+    chainId = (await ethers.provider.getNetwork()).chainId;
 
     // Users
     await unlockAccount(dpxHolders[0]);
@@ -45,13 +47,13 @@ describe("Vault test", async () => {
     user2 = await ethers.provider.getSigner(dpxHolders[2]);
 
     // DpxToken
-    dpxToken = await ethers.getContractAt(dpxTokenAbi, dpx);
+    dpxToken = await ethers.getContractAt(dpxTokenAbi, dpx[chainId]);
 
     // RdpxToken
-    rdpxToken = await ethers.getContractAt(rdpxTokenAbi, rdpx);
+    rdpxToken = await ethers.getContractAt(rdpxTokenAbi, rdpx[chainId]);
 
     // StakingRewardsContract
-    stakingRewardsContract = await ethers.getContractAt(stakingRewardsContractAbi, stakingRewards);
+    stakingRewardsContract = await ethers.getContractAt(stakingRewardsContractAbi, stakingRewards[chainId]);
 
     // Chainlink Price Aggregator
     const priceOracleAggregator = await deployPriceOracleAggregator(
@@ -61,16 +63,16 @@ describe("Vault test", async () => {
     // Mock DPX Chainlink USD Adapter
     const mockERC20ChainlinkUSDAdapter = await deployMockDPXChainlinkUSDAdapter();
     await priceOracleAggregator.updateOracleForAsset(
-        dpx,
+        dpx[chainId],
         mockERC20ChainlinkUSDAdapter.address
     );
-    await priceOracleAggregator.getPriceInUSD(dpx);
+    await priceOracleAggregator.getPriceInUSD(dpx[chainId]);
 
     // Mock Option Pricing
     optionPricing = await deployMockOptionPricing();
 
     // Vault
-    vault = await deployVault(dpx, rdpx, stakingRewards, optionPricing.address, priceOracleAggregator.address);
+    vault = await deployVault(dpx[chainId], rdpx[chainId], stakingRewards[chainId], optionPricing.address, priceOracleAggregator.address);
   });
 
   // Contract Info
@@ -78,14 +80,14 @@ describe("Vault test", async () => {
 
       // DPX/RDPX/StakingRewards
       it("DPX/RDPX/StakingRewards Address", async () => {
-        expect((await vault.dpx()).toString().toLowerCase()).to.equal(dpx);
-        expect((await vault.rdpx()).toString().toLowerCase()).to.equal(rdpx);
-        expect((await vault.stakingRewards()).toString().toLowerCase()).to.equal(stakingRewards);
+        expect((await vault.dpx()).toString().toLowerCase()).to.equal(dpx[chainId]);
+        expect((await vault.rdpx()).toString().toLowerCase()).to.equal(rdpx[chainId]);
+        expect((await vault.stakingRewards()).toString().toLowerCase()).to.equal(stakingRewards[chainId]);
       });
 
       // DPX token price = 100$
       it("DPX token price is 100 USD", async () => {
-          expect((await vault.viewUsdPrice(dpx))).to.equal(expandToDecimals(100, 8));
+          expect((await vault.viewUsdPrice(dpx[chainId]))).to.equal(expandToDecimals(100, 8));
       })
   });
 

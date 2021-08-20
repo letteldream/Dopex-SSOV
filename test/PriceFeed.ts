@@ -13,6 +13,7 @@ import { priceFeedAddresses, dpx, weth, uniswapFactory } from "../helper/data";
 import { PriceOracleAggregator } from "../types";
 
 describe("chainlink PriceFeed test", async () => {
+  let chainId: number;
   let signers: SignerWithAddress[];
   let priceOracleAggregator: PriceOracleAggregator;
 
@@ -21,6 +22,7 @@ describe("chainlink PriceFeed test", async () => {
     priceOracleAggregator = await deployPriceOracleAggregator(
       signers[0].address
     );
+    chainId = (await ethers.provider.getNetwork()).chainId;
   });
 
   // Mainnet Tokens test
@@ -46,16 +48,16 @@ describe("chainlink PriceFeed test", async () => {
     // UniswapV2Oracle Setup (DPX)
     const uniswapV2Oracle = await deployUniswapV2Oracle(
         uniswapFactory,
-        dpx,
+        dpx[chainId],
         weth,
         priceOracleAggregator.address
     )
     await priceOracleAggregator.updateOracleForAsset(
-        dpx,
+        dpx[chainId],
         uniswapV2Oracle.address
     )
     timeTravel(24 * 60 * 60);
-    await priceOracleAggregator.getPriceInUSD(dpx);
+    await priceOracleAggregator.getPriceInUSD(dpx[chainId]);
 
     // Get Tokens USD Price
     console.log("Ethereum price in USD");
@@ -96,7 +98,7 @@ describe("chainlink PriceFeed test", async () => {
     console.log("DPX Token price in USD");
     console.log(
       (await priceOracleAggregator.viewPriceInUSD(
-        dpx
+        dpx[chainId]
       )).toNumber()
     );
   });
