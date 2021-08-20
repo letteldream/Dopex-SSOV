@@ -7,3 +7,6 @@ types
 
 #env
 .env
+
+# vscode settings
+.vscode
