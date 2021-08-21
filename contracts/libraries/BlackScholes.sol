@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 // Libraries
-import {ABDKMathQuad} from '../external/math/ABDKMathQuad.sol';
+import { ABDKMathQuad } from "../external/math/ABDKMathQuad.sol";
 
 /// @title Black-Scholes option pricing formula and supporting statistical functions
 /// @author Dopex
@@ -41,25 +41,35 @@ library BlackScholes {
   ) internal pure returns (uint256) {
     bytes16 S = ABDKMathQuad.fromUInt(price);
     bytes16 X = ABDKMathQuad.fromUInt(strike);
-    bytes16 T =
-      ABDKMathQuad.div(
-        ABDKMathQuad.fromUInt(timeToExpiry),
-        ABDKMathQuad.fromUInt(36500) // 365 * 10 ^ DAYS_PRECISION
-      );
-    bytes16 r = ABDKMathQuad.div(ABDKMathQuad.fromUInt(riskFreeRate), ABDKMathQuad.fromUInt(10000));
-    bytes16 v = ABDKMathQuad.div(ABDKMathQuad.fromUInt(volatility), ABDKMathQuad.fromUInt(100));
-    bytes16 d1 =
-      ABDKMathQuad.div(
-        ABDKMathQuad.add(
-          ABDKMathQuad.ln(ABDKMathQuad.div(S, X)),
-          ABDKMathQuad.mul(
-            ABDKMathQuad.add(r, ABDKMathQuad.mul(v, ABDKMathQuad.div(v, ABDKMathQuad.fromUInt(2)))),
-            T
-          )
-        ),
-        ABDKMathQuad.mul(v, ABDKMathQuad.sqrt(T))
-      );
-    bytes16 d2 = ABDKMathQuad.sub(d1, ABDKMathQuad.mul(v, ABDKMathQuad.sqrt(T)));
+    bytes16 T = ABDKMathQuad.div(
+      ABDKMathQuad.fromUInt(timeToExpiry),
+      ABDKMathQuad.fromUInt(36500) // 365 * 10 ^ DAYS_PRECISION
+    );
+    bytes16 r = ABDKMathQuad.div(
+      ABDKMathQuad.fromUInt(riskFreeRate),
+      ABDKMathQuad.fromUInt(10000)
+    );
+    bytes16 v = ABDKMathQuad.div(
+      ABDKMathQuad.fromUInt(volatility),
+      ABDKMathQuad.fromUInt(100)
+    );
+    bytes16 d1 = ABDKMathQuad.div(
+      ABDKMathQuad.add(
+        ABDKMathQuad.ln(ABDKMathQuad.div(S, X)),
+        ABDKMathQuad.mul(
+          ABDKMathQuad.add(
+            r,
+            ABDKMathQuad.mul(v, ABDKMathQuad.div(v, ABDKMathQuad.fromUInt(2)))
+          ),
+          T
+        )
+      ),
+      ABDKMathQuad.mul(v, ABDKMathQuad.sqrt(T))
+    );
+    bytes16 d2 = ABDKMathQuad.sub(
+      d1,
+      ABDKMathQuad.mul(v, ABDKMathQuad.sqrt(T))
+    );
     if (optionType == OPTION_TYPE_CALL) {
       return
         ABDKMathQuad.toUInt(
@@ -94,7 +104,10 @@ library BlackScholes {
       ABDKMathQuad.sub(
         ABDKMathQuad.mul(S, CND(d1)),
         ABDKMathQuad.mul(
-          ABDKMathQuad.mul(X, ABDKMathQuad.exp(ABDKMathQuad.mul(ABDKMathQuad.neg(r), T))),
+          ABDKMathQuad.mul(
+            X,
+            ABDKMathQuad.exp(ABDKMathQuad.mul(ABDKMathQuad.neg(r), T))
+          ),
           CND(d2)
         )
       );
@@ -111,11 +124,13 @@ library BlackScholes {
     bytes16 S,
     bytes16 d1
   ) internal pure returns (bytes16) {
-    bytes16 price_part1 =
+    bytes16 price_part1 = ABDKMathQuad.mul(
       ABDKMathQuad.mul(
-        ABDKMathQuad.mul(X, ABDKMathQuad.exp(ABDKMathQuad.mul(ABDKMathQuad.neg(r), T))),
-        CND(ABDKMathQuad.neg(d2))
-      );
+        X,
+        ABDKMathQuad.exp(ABDKMathQuad.mul(ABDKMathQuad.neg(r), T))
+      ),
+      CND(ABDKMathQuad.neg(d2))
+    );
     bytes16 price_part2 = ABDKMathQuad.mul(S, CND(ABDKMathQuad.neg(d1)));
     bytes16 price = ABDKMathQuad.sub(price_part1, price_part2);
     return price;
@@ -131,22 +146,23 @@ library BlackScholes {
    */
   function CND(bytes16 x) internal pure returns (bytes16) {
     if (ABDKMathQuad.toInt(x) < 0) {
-      return (ABDKMathQuad.sub(ABDKMathQuad.fromUInt(1), CND(ABDKMathQuad.neg(x))));
+      return (
+        ABDKMathQuad.sub(ABDKMathQuad.fromUInt(1), CND(ABDKMathQuad.neg(x)))
+      );
     } else {
-      bytes16 k =
-        ABDKMathQuad.div(
+      bytes16 k = ABDKMathQuad.div(
+        ABDKMathQuad.fromUInt(1),
+        ABDKMathQuad.add(
           ABDKMathQuad.fromUInt(1),
-          ABDKMathQuad.add(
-            ABDKMathQuad.fromUInt(1),
-            ABDKMathQuad.mul(
-              ABDKMathQuad.div(
-                ABDKMathQuad.fromUInt(2316419000000000),
-                ABDKMathQuad.fromUInt(DIVISOR)
-              ),
-              x
-            )
+          ABDKMathQuad.mul(
+            ABDKMathQuad.div(
+              ABDKMathQuad.fromUInt(2316419000000000),
+              ABDKMathQuad.fromUInt(DIVISOR)
+            ),
+            x
           )
-        );
+        )
+      );
       bytes16 CND_part2 = _getCNDPart2(k, x);
       return ABDKMathQuad.sub(ABDKMathQuad.fromUInt(1), CND_part2);
     }
@@ -160,7 +176,10 @@ library BlackScholes {
     return
       ABDKMathQuad.div(
         ABDKMathQuad.exp(
-          ABDKMathQuad.mul(ABDKMathQuad.neg(x), ABDKMathQuad.div(x, ABDKMathQuad.fromUInt(2)))
+          ABDKMathQuad.mul(
+            ABDKMathQuad.neg(x),
+            ABDKMathQuad.div(x, ABDKMathQuad.fromUInt(2))
+          )
         ),
         ABDKMathQuad.sqrt(
           ABDKMathQuad.mul(
@@ -178,7 +197,10 @@ library BlackScholes {
     return
       ABDKMathQuad.mul(
         ABDKMathQuad.add(
-          ABDKMathQuad.div(ABDKMathQuad.fromUInt(3193815300000000), ABDKMathQuad.fromUInt(DIVISOR)),
+          ABDKMathQuad.div(
+            ABDKMathQuad.fromUInt(3193815300000000),
+            ABDKMathQuad.fromUInt(DIVISOR)
+          ),
           ABDKMathQuad.mul(
             k,
             ABDKMathQuad.add(

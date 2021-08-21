@@ -31,8 +31,6 @@ pragma solidity ^0.8.0;
             Mints covered calls while farming yield on single sided DPX staking vaults                                                            
 */
 
-import "hardhat/console.sol";
-
 // Libraries
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { ERC20PresetMinterPauser } from "@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol";
@@ -57,77 +55,96 @@ contract Vault is Ownable {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
-  // DPX token
+  /// @dev DPX token
   IERC20 public dpx;
 
-  // rDPX token
+  /// @dev rDPX token
   IERC20 public rdpx;
-  // DPX single staking rewards contract
+
+  /// @dev DPX single staking rewards contract
   IStakingRewards public stakingRewards;
-  // Option pricing provider
+
+  /// @dev Option pricing provider
   IOptionPricing public optionPricing;
 
-  // ivOracle addrss
+  /// @dev ivOracle address
   address public ivOracleAddress;
 
-  // Current epoch for vault
+  /// @dev Current epoch for vault
   uint256 public currentEpoch;
+
   /// @dev epoch => the epoch start time
   mapping(uint256 => uint256) public epochStartTimes;
+
   /// @notice Is epoch expired
   /// @dev epoch => whether the epoch is expired
   mapping(uint256 => bool) public isEpochExpired;
+
   /// @notice Is vault ready for next epoch
   /// @dev epoch => whether the vault is ready (boostrapped)
   mapping(uint256 => bool) public isVaultReady;
 
-  // Mapping of strikes for each epoch
+  /// @dev Mapping of strikes for each epoch
   mapping(uint256 => uint256[]) public epochStrikes;
-  // Mapping of (epoch => (strike => tokens))
+
+  /// @dev Mapping of (epoch => (strike => tokens))
   mapping(uint256 => mapping(uint256 => address)) public epochStrikeTokens;
 
-  // Total epoch deposits for specific strikes
-  // mapping (epoch => (strike => deposits))
+  /// @notice Total epoch deposits for specific strikes
+  /// @dev mapping (epoch => (strike => deposits))
   mapping(uint256 => mapping(uint256 => uint256))
     public totalEpochStrikeDeposits;
-  // Total epoch deposits across all strikes
-  // mapping (epoch => deposits)
+
+  /// @notice Total epoch deposits across all strikes
+  /// @dev mapping (epoch => deposits)
   mapping(uint256 => uint256) public totalEpochDeposits;
-  // Epoch deposits by user for each strike
-  // mapping (epoch => (abi.encodePacked(user, strike) => user deposits))
+
+  /// @notice Epoch deposits by user for each strike
+  /// @dev mapping (epoch => (abi.encodePacked(user, strike) => user deposits))
   mapping(uint256 => mapping(bytes32 => uint256)) public userEpochDeposits;
-  // Epoch DPX balance after accounting for rewards
-  // mapping (epoch => balance)
+
+  /// @notice Epoch DPX balance after accounting for rewards
+  /// @dev mapping (epoch => balance)
   mapping(uint256 => uint256) public totalEpochDpxBalance;
-  // Epoch rDPX balance after accounting for rewards
-  // mapping (epoch => balance)
+
+  /// @notice Epoch rDPX balance after accounting for rewards
+  /// @dev mapping (epoch => balance)
   mapping(uint256 => uint256) public totalEpochRdpxBalance;
+
   // Calls purchased for each strike in an epoch
-  // mapping (epoch => (strike => calls purchased))
+  /// @dev mapping (epoch => (strike => calls purchased))
   mapping(uint256 => mapping(uint256 => uint256))
     public totalEpochCallsPurchased;
-  // Calls purchased by user for each strike
-  // mapping (epoch => (abi.encodePacked(user, strike) => user calls purchased))
+
+  /// @notice Calls purchased by user for each strike
+  /// @dev mapping (epoch => (abi.encodePacked(user, strike) => user calls purchased))
   mapping(uint256 => mapping(bytes32 => uint256))
     public userEpochCallsPurchased;
-  // Premium collected per strike for an epoch
-  // mapping (epoch => (strike => premium))
+
+  /// @notice Premium collected per strike for an epoch
+  /// @dev mapping (epoch => (strike => premium))
   mapping(uint256 => mapping(uint256 => uint256)) public totalEpochPremium;
-  // User premium collected per strike for an epoch
-  // mapping (epoch => (abi.encodePacked(user, strike) => user premium))
+
+  /// @notice User premium collected per strike for an epoch
+  /// @dev mapping (epoch => (abi.encodePacked(user, strike) => user premium))
   mapping(uint256 => mapping(bytes32 => uint256)) public userEpochPremium;
-  // Total dpx tokens that were sent back to the buyer when a
-  // vault is exercised
-  // mapping (epoch => amount)
+
+  /// @notice Total dpx tokens that were sent back to the buyer when a vault is exercised
+  /// @dev mapping (epoch => amount)
   mapping(uint256 => uint256) public totalTokenVaultExercises;
 
-  // Price Oracle Aggregator
+  /// @notice Price Oracle Aggregator
   /// @dev getPriceInUSD(address _token)
   IPriceOracleAggregator public priceOracleAggregator;
 
+  /*==== EVENTS ====*/
+
   event LogNewStrike(uint256 epoch, uint256 strike);
+
   event LogBootstrap(uint256 epoch);
+
   event LogNewDeposit(uint256 epoch, uint256 strike, address user);
+
   event LogNewPurchase(
     uint256 epoch,
     uint256 strike,
@@ -135,6 +152,7 @@ contract Vault is Ownable {
     uint256 amount,
     uint256 premium
   );
+
   event LogNewExercise(
     uint256 epoch,
     uint256 strike,
@@ -142,12 +160,14 @@ contract Vault is Ownable {
     uint256 amount,
     uint256 pnl
   );
+
   event LogCompound(
     uint256 epoch,
     uint256 rewards,
     uint256 oldBalance,
     uint256 newBalance
   );
+
   event LogNewWithdrawForStrike(
     uint256 epoch,
     uint256 strike,
@@ -160,7 +180,8 @@ contract Vault is Ownable {
     address _rdpx,
     address _stakingRewards,
     address _optionPricing,
-    address _priceOracleAggregator
+    address _priceOracleAggregator,
+    address _ivOracleAddress
   ) {
     require(_dpx != address(0), "Invalid dpx address");
     require(_rdpx != address(0), "Invalid rdpx address");
@@ -176,6 +197,7 @@ contract Vault is Ownable {
     stakingRewards = IStakingRewards(_stakingRewards);
     optionPricing = IOptionPricing(_optionPricing);
     priceOracleAggregator = IPriceOracleAggregator(_priceOracleAggregator);
+    ivOracleAddress = _ivOracleAddress;
   }
 
   /// @notice Sets the current epoch as expired.

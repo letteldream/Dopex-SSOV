@@ -1,10 +1,11 @@
+#node files
 node_modules
-deployments
 
-#Hardhat files
+#hardhat files
 cache
 artifacts
 types
+deployments
 
 #env
 .env

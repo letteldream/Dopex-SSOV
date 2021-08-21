@@ -5,7 +5,7 @@ import { ChainlinkUSDAdapter } from "../types/ChainlinkUSDAdapter";
 import { UniswapV2Oracle } from "../types/UniswapV2Oracle";
 import { MockDPXChainlinkUSDAdapter } from "../types/MockDPXChainlinkUSDAdapter";
 import { MockOptionPricing } from "../types/MockOptionPricing";
-import { Vault} from "../types/Vault";
+import { Vault } from "../types/Vault";
 
 const hre = require("hardhat");
 
@@ -43,10 +43,10 @@ export const deployChainlinkUSDAdapter = async (
 };
 
 export const deployUniswapV2Oracle = async (
-    factory: string,
-    tokenA: string,
-    tokenB: string,
-    aggregator: string
+  factory: string,
+  tokenA: string,
+  tokenB: string,
+  aggregator: string
 ) => {
   return await deployContract<UniswapV2Oracle>("UniswapV2Oracle", [
     factory,
@@ -54,7 +54,7 @@ export const deployUniswapV2Oracle = async (
     tokenB,
     aggregator,
   ]);
-}
+};
 
 export const deployMockDPXChainlinkUSDAdapter = async () => {
   return await deployContract<MockDPXChainlinkUSDAdapter>(
@@ -64,24 +64,23 @@ export const deployMockDPXChainlinkUSDAdapter = async () => {
 };
 
 export const deployMockOptionPricing = async () => {
-  return await deployContract<MockOptionPricing>(
-    "MockOptionPricing",
-    []
-  );
+  return await deployContract<MockOptionPricing>("MockOptionPricing", []);
 };
 
 export const deployVault = async (
-    dpx: string,
-    rdpx: string,
-    stakingRewards: string,
-    optionPricing: string,
-    priceOracleAggregator: string
+  dpx: string,
+  rdpx: string,
+  stakingRewards: string,
+  optionPricing: string,
+  priceOracleAggregator: string,
+  ivOracleAddress: string
 ) => {
   return await deployContract<Vault>("Vault", [
     dpx,
     rdpx,
     stakingRewards,
     optionPricing,
-    priceOracleAggregator
+    priceOracleAggregator,
+    ivOracleAddress,
   ]);
-}
+};
