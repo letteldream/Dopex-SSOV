@@ -35,10 +35,10 @@ export default {
   },
   networks: {
     hardhat: {
-      // forking: {
-      //   url: process.env.MAIN_NET_API_URL,
-      // },
-      // hardfork: 'london',
+      forking: {
+        url: process.env.MAIN_NET_API_URL,
+      },
+      hardfork: "london",
       gasPrice: "auto",
     },
     localhost: {

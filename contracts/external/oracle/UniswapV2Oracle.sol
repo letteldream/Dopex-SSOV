@@ -216,8 +216,6 @@ contract UniswapV2Oracle is IOracle {
     }
     latestAnswer = price;
 
-    console.log("++++++", price0Average, price1Average);
-
     emit PriceUpdated(isFirstToken ? token0 : token1, price);
   }
 
