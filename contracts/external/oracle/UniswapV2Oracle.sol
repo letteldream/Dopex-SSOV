@@ -139,7 +139,7 @@ contract UniswapV2Oracle is IOracle {
     address _tokenA,
     address _tokenB,
     address _priceOracleAggregator
-  ) public {
+  ) {
     require(_priceOracleAggregator != address(0), "UNIV2: Invalid Aggregator");
     require(_factory != address(0), "UNIV2: Invalid factory");
     require(_tokenA != address(0), "UNIV2: Invalid tokenA");
