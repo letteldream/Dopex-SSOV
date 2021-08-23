@@ -1,12 +1,7 @@
 import { DeployFunction } from 'hardhat-deploy/types'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
-import {
-  chainIdToNetwork,
-  dpx,
-  rdpx,
-  stakingRewards,
-  optionPricing,
-} from '../helper/data'
+import { chainIdToNetwork, dpx, rdpx, stakingRewards } from '../helper/data'
+import { BigNumber } from 'ethers'
 
 const deploy = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts, getChainId, ethers } = hre
@@ -16,16 +11,8 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
   const dpxAddress = dpx[chainId]
   const rdpxAddress = rdpx[chainId]
   const stakingRewardsAddress = stakingRewards[chainId]
-  const optionPricingAddress = optionPricing[chainId]
 
-  if (
-    !network ||
-    !dpxAddress ||
-    !rdpxAddress ||
-    !stakingRewardsAddress ||
-    !optionPricingAddress
-  )
-    return
+  if (!network || !dpxAddress || !rdpxAddress || !stakingRewardsAddress) return
 
   // Deploy MockDPXChainlinkUSDAdapter
   const mockDPXChainlinkUSDAdapter = await deployments.deploy(
@@ -55,6 +42,28 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
     mockDPXChainlinkUSDAdapter.address
   )
 
+  // Deploy OptionPricing
+  const optionPricing = await deployments.deploy('OptionPricing', {
+    from: deployer,
+    // libraries: {},
+    args: [
+      BigNumber.from(500).toString(),
+      BigNumber.from(10).pow(8).toString(),
+      BigNumber.from(10).pow(8).toString(),
+      BigNumber.from(9).pow(8).div(1000).toString(),
+      BigNumber.from(9).pow(8).div(1000).toString(),
+    ],
+    log: true,
+  })
+
+  // Deploy IvOracle
+  const ivOracle = await deployments.deploy('IvOracle', {
+    from: deployer,
+    args: [],
+    // libraries: {},
+    log: true,
+  })
+
   // Deploy Vault
   const vault = await deployments.deploy('Vault', {
     from: deployer,
@@ -62,8 +71,9 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
       dpxAddress,
       rdpxAddress,
       stakingRewardsAddress,
-      optionPricingAddress,
+      optionPricing.address,
       priceOracleAggregator.address,
+      ivOracle.address,
     ],
     // libraries: {},
     log: true,
@@ -78,13 +88,27 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
     constructorArguments: [deployer],
   })
   await hre.run('verify:verify', {
+    address: optionPricing.address,
+    constructorArguments: [
+      BigNumber.from(500).toString(),
+      BigNumber.from(10).pow(8).toString(),
+      BigNumber.from(10).pow(8).toString(),
+      BigNumber.from(9).pow(8).div(1000).toString(),
+      BigNumber.from(9).pow(8).div(1000).toString(),
+    ],
+  })
+  await hre.run('verify:verify', {
+    address: ivOracle.address,
+  })
+  await hre.run('verify:verify', {
     address: vault.address,
     constructorArguments: [
       dpxAddress,
       rdpxAddress,
       stakingRewardsAddress,
-      optionPricingAddress,
+      optionPricing.address,
       priceOracleAggregator.address,
+      ivOracle.address,
     ],
   })
 }
