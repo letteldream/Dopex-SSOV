@@ -278,6 +278,9 @@ contract Vault is Ownable {
     returns (bool)
   {
     uint256 nextEpoch = currentEpoch + 1;
+
+    require(totalEpochDeposits[nextEpoch] == 0, 'Deposit already started');
+
     // Set the next epoch strikes
     epochStrikes[nextEpoch] = strikes;
     // Set the next epoch start time
