@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import "../interfaces/IOracle.sol";
+import { IOracle } from "../interfaces/IOracle.sol";
 
 contract MockDPXChainlinkUSDAdapter is IOracle {
   function getPriceInUSD() external pure override returns (uint256 price) {

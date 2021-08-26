@@ -44,10 +44,10 @@ import { SafeERC20 } from "./libraries/SafeERC20.sol";
 import { IvOracle } from "./oracle/IvOracle.sol";
 
 // Interfaces
-import "./interfaces/IERC20.sol";
-import "./interfaces/IStakingRewards.sol";
-import "./interfaces/IOptionPricing.sol";
-import "./interfaces/IPriceOracleAggregator.sol";
+import { IERC20 } from "./interfaces/IERC20.sol";
+import { IStakingRewards } from "./interfaces/IStakingRewards.sol";
+import { IOptionPricing } from "./interfaces/IOptionPricing.sol";
+import { IPriceOracleAggregator } from "./interfaces/IPriceOracleAggregator.sol";
 
 contract Vault is Ownable {
   using BokkyPooBahsDateTimeLibrary for uint256;
@@ -175,6 +175,8 @@ contract Vault is Ownable {
     uint256 amount
   );
 
+  /*==== CONSTRUCTOR ====*/
+
   constructor(
     address _dpx,
     address _rdpx,
@@ -200,6 +202,8 @@ contract Vault is Ownable {
     ivOracleAddress = _ivOracleAddress;
   }
 
+  /*==== METHODS ====*/
+
   /// @notice Sets the current epoch as expired.
   /// @return Whether expire was successful
   function expireEpoch() external onlyOwner returns (bool) {
@@ -219,7 +223,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Bootstraps a new epoch and mints option tokens equivalent to user deposits for the epoch
+   * @notice Bootstraps a new epoch and mints option tokens equivalent to user deposits for the epoch
    * @return Whether bootstrap was successful
    */
   function bootstrap() external onlyOwner returns (bool) {
@@ -268,7 +272,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Sets strikes for next epoch
+   * @notice Sets strikes for next epoch
    * @param strikes Strikes to set for next epoch
    * @return Whether strikes were set
    */
@@ -298,7 +302,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Deposits dpx into vaults to mint options in the next epoch for selected strikes
+   * @notice Deposits dpx into vaults to mint options in the next epoch for selected strikes
    * @param strikeIndex Index of strike
    * @param amount Amout of DPX to deposit
    * @return Whether deposit was successful
@@ -339,7 +343,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Deposit DPX multiple times
+   * @notice Deposit DPX multiple times
    * @param strikeIndices Indices of strikes to deposit into
    * @param amounts Amount of DPX to deposit into each strike index
    * @return Whether deposits went through successfully
@@ -359,7 +363,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Purchases calls for the current epoch
+   * @notice Purchases calls for the current epoch
    * @param strikeIndex Strike index for current epoch
    * @param amount Amount of calls to purchase
    * @return Whether purchase was successful
@@ -425,7 +429,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Exercise calculates the PnL for the user. Withdraw the PnL in DPX from the SSF and transfer it to the user. Will also the burn the doTokens from the user.
+   * @notice Exercise calculates the PnL for the user. Withdraw the PnL in DPX from the SSF and transfer it to the user. Will also the burn the doTokens from the user.
    * @param exerciseEpoch Target epoch
    * @param strikeIndex Strike index for current epoch
    * @param amount Amount of calls to exercise
@@ -490,7 +494,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Allows anyone to call compound()
+   * @notice Allows anyone to call compound()
    * @return Whether compound was successful
    */
   function compound() public returns (bool) {
@@ -517,7 +521,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Withdraws balances for a strike in a completed epoch
+   * @notice Withdraws balances for a strike in a completed epoch
    * @param withdrawEpoch Epoch to withdraw from
    * @param strikeIndex Index of strike
    * @return Whether withdraw was successful
@@ -623,7 +627,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns start and end times for an epoch
+   * @notice Returns start and end times for an epoch
    * @param epoch Target epoch
    */
   function getEpochTimes(uint256 epoch)
@@ -640,7 +644,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns epoch strikes array for an epoch
+   * @notice Returns epoch strikes array for an epoch
    * @param epoch Target epoch
    */
   function getEpochStrikes(uint256 epoch)
@@ -675,7 +679,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns total epoch strike deposits array for an epoch
+   * @notice Returns total epoch strike deposits array for an epoch
    * @param epoch Target epoch
    */
   function getTotalEpochStrikeDeposits(uint256 epoch)
@@ -698,7 +702,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns user epoch deposits array for an epoch
+   * @notice Returns user epoch deposits array for an epoch
    * @param epoch Target epoch
    * @param user Address of the user
    */
@@ -723,7 +727,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns total epoch calls purchased array for an epoch
+   * @notice Returns total epoch calls purchased array for an epoch
    * @param epoch Target epoch
    */
   function getTotalEpochCallsPurchased(uint256 epoch)
@@ -746,7 +750,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns user epoch calls purchased array for an epoch
+   * @notice Returns user epoch calls purchased array for an epoch
    * @param epoch Target epoch
    * @param user Address of the user
    */
@@ -771,7 +775,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns total epoch premium array for an epoch
+   * @notice Returns total epoch premium array for an epoch
    * @param epoch Target epoch
    */
   function getTotalEpochPremium(uint256 epoch)
@@ -792,7 +796,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns user epoch premium array for an epoch
+   * @notice Returns user epoch premium array for an epoch
    * @param epoch Target epoch
    * @param user Address of the user
    */
@@ -817,7 +821,7 @@ contract Vault is Ownable {
   }
 
   /**
-   * Update & Returns token's price in USD
+   * @notice Update & Returns token's price in USD
    * @param _token Address of the token
    */
   function getUsdPrice(address _token) public returns (uint256) {
@@ -825,13 +829,18 @@ contract Vault is Ownable {
   }
 
   /**
-   * Returns token's price in USD
+   * @notice Returns token's price in USD
    * @param _token Address of the token
    */
   function viewUsdPrice(address _token) public view returns (uint256) {
     return priceOracleAggregator.viewPriceInUSD(_token);
   }
 
+  /**
+   * @notice Returns a concatenated string of a and b
+   * @param a string a
+   * @param b string b
+   */
   function concatenate(string memory a, string memory b)
     internal
     pure

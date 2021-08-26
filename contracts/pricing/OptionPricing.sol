@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-
 pragma solidity ^0.8.0;
-
-pragma experimental ABIEncoderV2;
 
 // Libraries
 import { SafeMath } from "@openzeppelin/contracts/utils/math/SafeMath.sol";
