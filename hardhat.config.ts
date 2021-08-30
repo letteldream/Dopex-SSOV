@@ -1,12 +1,12 @@
-import '@typechain/hardhat'
-import '@nomiclabs/hardhat-ethers'
-import '@nomiclabs/hardhat-waffle'
-import 'hardhat-contract-sizer'
-import 'solidity-coverage'
-import 'hardhat-deploy'
-import '@nomiclabs/hardhat-etherscan'
+import '@typechain/hardhat';
+import '@nomiclabs/hardhat-ethers';
+import '@nomiclabs/hardhat-waffle';
+import 'hardhat-contract-sizer';
+import 'solidity-coverage';
+import 'hardhat-deploy';
+import '@nomiclabs/hardhat-etherscan';
 
-require('dotenv').config()
+require('dotenv').config();
 
 export default {
   solidity: {
@@ -44,10 +44,10 @@ export default {
     localhost: {
       url: 'http://127.0.0.1:8545',
     },
-    kovan: {
-      url: process.env.KOVAN_NET_API_URL,
-      accounts: [process.env.PRIVATE_KEY],
-    },
+    // kovan: {
+    //   url: process.env.KOVAN_NET_API_URL,
+    //   accounts: [process.env.PRIVATE_KEY],
+    // },
   },
   paths: {
     deploy: 'deploy',
@@ -57,4 +57,4 @@ export default {
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
-}
+};

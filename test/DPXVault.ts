@@ -1,32 +1,31 @@
-import { expect } from "chai";
-import { Contract, Signer } from "ethers";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { ethers } from "hardhat";
+import { expect } from 'chai';
+import { Contract, Signer } from 'ethers';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { ethers } from 'hardhat';
 
 import {
   deployPriceOracleAggregator,
   deployMockDPXChainlinkUSDAdapter,
   deployMockOptionPricing,
   deployVault,
-} from "../helper/contract";
+} from '../helper/contract';
 import {
   timeTravel,
   expandTo18Decimals,
   expandToDecimals,
   unlockAccount,
-} from "../helper/util";
+} from '../helper/util';
 import {
   dpxHolders,
   dpx,
   dpxTokenAbi,
   rdpx,
-  rdpxTokenAbi,
   stakingRewards,
   stakingRewardsContractAbi,
-} from "../helper/data";
-import { Vault, MockOptionPricing } from "../types";
+} from '../helper/data';
+import { Vault, MockOptionPricing } from '../types';
 
-describe("Vault test", async () => {
+describe('Vault test', async () => {
   let chainId: number;
   let signers: SignerWithAddress[];
   let owner: SignerWithAddress;
@@ -34,7 +33,6 @@ describe("Vault test", async () => {
   let user1: Signer;
   let user2: Signer;
   let dpxToken: Contract;
-  let rdpxToken: Contract;
   let stakingRewardsContract: Contract;
   let optionPricing: MockOptionPricing;
   let vault: Vault;
@@ -76,9 +74,6 @@ describe("Vault test", async () => {
     // DpxToken
     dpxToken = await ethers.getContractAt(dpxTokenAbi, dpx[chainId]);
 
-    // RdpxToken
-    rdpxToken = await ethers.getContractAt(rdpxTokenAbi, rdpx[chainId]);
-
     // StakingRewardsContract
     stakingRewardsContract = await ethers.getContractAt(
       stakingRewardsContractAbi,
@@ -102,7 +97,7 @@ describe("Vault test", async () => {
     // Mock Option Pricing
     optionPricing = await deployMockOptionPricing();
 
-    const MockIvOracle = await ethers.getContractFactory("MockIvOracle");
+    const MockIvOracle = await ethers.getContractFactory('MockIvOracle');
 
     const mockIvOracle = await MockIvOracle.deploy();
 
@@ -118,9 +113,9 @@ describe("Vault test", async () => {
   });
 
   // Contract Info
-  describe("Vault Contract Info", async () => {
+  describe('Vault Contract Info', async () => {
     // DPX/RDPX/StakingRewards
-    it("DPX/RDPX/StakingRewards Address", async () => {
+    it('DPX/RDPX/StakingRewards Address', async () => {
       expect((await vault.dpx()).toString().toLowerCase()).to.equal(
         dpx[chainId]
       );
@@ -133,7 +128,7 @@ describe("Vault test", async () => {
     });
 
     // DPX token price = 100$
-    it("DPX token price is 100 USD", async () => {
+    it('DPX token price is 100 USD', async () => {
       expect(await vault.viewUsdPrice(dpx[chainId])).to.equal(
         expandToDecimals(100, 8)
       );
@@ -141,16 +136,16 @@ describe("Vault test", async () => {
   });
 
   // Strikes
-  describe("Vault Strikes", async () => {
+  describe('Vault Strikes', async () => {
     // Set Strikes OnlyOwner
-    it("Set Strikes OnlyOwner", async () => {
+    it('Set Strikes OnlyOwner', async () => {
       await expect(vault.connect(user0).setStrikes([120])).to.be.revertedWith(
-        "Ownable: caller is not the owner"
+        'Ownable: caller is not the owner'
       );
     });
 
     // Set Strikes
-    it("Set Strikes Success", async () => {
+    it('Set Strikes Success', async () => {
       await vault.connect(owner).setStrikes(strikes);
 
       expect(await vault.epochStrikes(1, 0)).to.equal(strikes[0]);
@@ -160,25 +155,25 @@ describe("Vault test", async () => {
   });
 
   // Deposit Single/Multiple
-  describe("Deposit Single/Multiple", async () => {
+  describe('Deposit Single/Multiple', async () => {
     // Deposit with wrong strike
-    it("Deposit with wrong strike", async () => {
+    it('Deposit with wrong strike', async () => {
       await expect(vault.connect(user0).deposit(3, 100)).to.be.revertedWith(
-        "Invalid strike"
+        'E15'
       );
       await expect(vault.connect(user0).deposit(4, 100)).to.be.revertedWith(
-        "Invalid strike index"
+        'E13'
       );
     });
 
     // Deposit single
-    it("Deposit single & userEpochDeposits/totalEpochStrikeDeposits/totalEpochDeposits", async () => {
+    it('Deposit single & userEpochDeposits/totalEpochStrikeDeposits/totalEpochDeposits', async () => {
       const amount0 = expandTo18Decimals(10);
       const user0Address = await user0.getAddress();
       const epoch = (await vault.currentEpoch()).add(1);
       const strike = await vault.epochStrikes(epoch, 0);
       const userStrike = ethers.utils.solidityKeccak256(
-        ["address", "uint256"],
+        ['address', 'uint256'],
         [user0Address, strike]
       );
 
@@ -200,7 +195,7 @@ describe("Vault test", async () => {
       // Deposit & Event
       await expect(vault.connect(user0).deposit(0, amount0)).to.emit(
         vault,
-        "LogNewDeposit"
+        'LogNewDeposit'
       );
 
       // Current Data
@@ -228,7 +223,7 @@ describe("Vault test", async () => {
     });
 
     // Deposit multiple
-    it("Deposit multiple", async () => {
+    it('Deposit multiple', async () => {
       const amount0 = expandTo18Decimals(15);
       const amount1 = expandTo18Decimals(25);
       const pastBalance = await dpxToken.balanceOf(await user1.getAddress());
@@ -248,16 +243,16 @@ describe("Vault test", async () => {
   });
 
   // Bootstrap
-  describe("Bootstrap", async () => {
+  describe('Bootstrap', async () => {
     // Bootstrap OnlyOwner
-    it("Bootstrap OnlyOwner", async () => {
+    it('Bootstrap OnlyOwner', async () => {
       await expect(vault.connect(user0).bootstrap()).to.be.revertedWith(
-        "Ownable: caller is not the owner"
+        'Ownable: caller is not the owner'
       );
     });
 
     // Bootstrap EpochStrikeTokens
-    it("Bootstrap EpochStrikeTokens name/symbol/amount", async () => {
+    it('Bootstrap EpochStrikeTokens name/symbol/amount', async () => {
       const pastEpoch = await vault.currentEpoch();
       await vault.connect(owner).bootstrap();
       const currentEpoch = await vault.currentEpoch();
@@ -286,38 +281,34 @@ describe("Vault test", async () => {
       }
     });
 
-    // Bootsrap with not expired previous epoch
-    it("Bootstrap with not expired previous epoch", async () => {
+    // Bootstrap with not expired previous epoch
+    it('Bootstrap with not expired previous epoch', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       // Set Strikes & Bootstrap
       await vault.connect(owner).setStrikes(strikes);
-      await expect(vault.connect(owner).bootstrap()).to.be.revertedWith(
-        "Previous epoch has not expired"
-      );
+      await expect(vault.connect(owner).bootstrap()).to.be.revertedWith('E10');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
   });
 
   // Expire
-  describe("Expire", async () => {
+  describe('Expire', async () => {
     // Expire OnlyOwner
-    it("Expire OnlyOwner", async () => {
+    it('Expire OnlyOwner', async () => {
       await expect(vault.connect(user0).expireEpoch()).to.be.revertedWith(
-        "Ownable: caller is not the owner"
+        'Ownable: caller is not the owner'
       );
     });
 
     // Expire before epoch's expiry
     it("Expire before epoch's expiry", async () => {
-      await expect(vault.connect(owner).expireEpoch()).to.be.revertedWith(
-        "Cannot expire epoch before epoch's expiry"
-      );
+      await expect(vault.connect(owner).expireEpoch()).to.be.revertedWith('E7');
     });
 
     // Expire 1st epoch
-    it("Expire 1st epoch", async () => {
+    it('Expire 1st epoch', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       await vault.connect(owner).expireEpoch();
@@ -326,19 +317,17 @@ describe("Vault test", async () => {
     });
 
     // Expire 1st epoch again
-    it("Expire 1st epoch again", async () => {
+    it('Expire 1st epoch again', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
-      await expect(vault.connect(owner).expireEpoch()).to.be.revertedWith(
-        "Epoch set as expired"
-      );
+      await expect(vault.connect(owner).expireEpoch()).to.be.revertedWith('E6');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
   });
 
   // Compound
-  describe("Compound", async () => {
+  describe('Compound', async () => {
     // Compound un-bootstrapped epoch
     // it("Compound un-bootstrapped epoch", async () => {
     //     timeTravel(24 * 60 * 60 * 30);
@@ -350,12 +339,12 @@ describe("Vault test", async () => {
     // });
 
     // Compound
-    it("Compound by any user", async () => {
+    it('Compound by any user', async () => {
       const epoch = await vault.currentEpoch();
 
       await expect(vault.connect(user2).compound()).to.emit(
         vault,
-        "LogCompound"
+        'LogCompound'
       );
 
       const totalEpochDpxBalance = await vault.totalEpochDpxBalance(epoch);
@@ -367,14 +356,14 @@ describe("Vault test", async () => {
   });
 
   // Purchase
-  describe("Purchase", async () => {
+  describe('Purchase', async () => {
     // Purhcase Invalid Strike
-    it("Purhcase Invalid Strike", async () => {
+    it('Purhcase Invalid Strike', async () => {
       await expect(vault.connect(user0).purchase(4, 10)).to.be.revertedWith(
-        "Invalid strike index"
+        'E13'
       );
       await expect(vault.connect(user0).purchase(3, 10)).to.be.revertedWith(
-        "Invalid strike"
+        'E15'
       );
     });
 
@@ -397,20 +386,20 @@ describe("Vault test", async () => {
     // })
 
     // Purchase exceeds the deposit amount
-    it("Purhcase exceeds the deposit amount", async () => {
+    it('Purhcase exceeds the deposit amount', async () => {
       await expect(
         vault.connect(user0).purchase(0, expandTo18Decimals(20))
-      ).to.be.revertedWith("User didn't deposit enough for purchase");
+      ).to.be.revertedWith('E17');
     });
 
     // Purchase
-    it("Purchase by user0", async () => {
+    it('Purchase by user0', async () => {
       const amount = expandTo18Decimals(5);
       const user0Address = await user0.getAddress();
       const epoch = await vault.currentEpoch();
       const strike = await vault.epochStrikes(epoch, 0);
       const userStrike = ethers.utils.solidityKeccak256(
-        ["address", "uint256"],
+        ['address', 'uint256'],
         [user0Address, strike]
       );
       const block = await ethers.provider.getBlock(
@@ -470,7 +459,7 @@ describe("Vault test", async () => {
       await dpxToken.connect(user0).approve(vault.address, premium);
       await expect(vault.connect(user0).purchase(0, amount)).to.emit(
         vault,
-        "LogNewPurchase"
+        'LogNewPurchase'
       );
 
       // Current Data
@@ -529,13 +518,13 @@ describe("Vault test", async () => {
       );
     });
 
-    it("Purchase by user1", async () => {
+    it('Purchase by user1', async () => {
       const amount = expandTo18Decimals(10);
       const user1Address = await user1.getAddress();
       const epoch = await vault.currentEpoch();
       const strike = await vault.epochStrikes(epoch, 1);
       const userStrike = ethers.utils.solidityKeccak256(
-        ["address", "uint256"],
+        ['address', 'uint256'],
         [user1Address, strike]
       );
       const block = await ethers.provider.getBlock(
@@ -595,7 +584,7 @@ describe("Vault test", async () => {
       await dpxToken.connect(user1).approve(vault.address, premium);
       await expect(vault.connect(user1).purchase(1, amount)).to.emit(
         vault,
-        "LogNewPurchase"
+        'LogNewPurchase'
       );
 
       // Current Data
@@ -656,9 +645,9 @@ describe("Vault test", async () => {
   });
 
   // Exercise
-  describe("Exercise", async () => {
+  describe('Exercise', async () => {
     // Exercise Invalid Strike
-    it("Exercise Invalid Strike", async () => {
+    it('Exercise Invalid Strike', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       // Set Strikes & Bootstrap
@@ -670,37 +659,37 @@ describe("Vault test", async () => {
 
       await expect(
         vault.connect(user0).exercise(epoch, 4, 10, user0Address)
-      ).to.be.revertedWith("Invalid strike index");
+      ).to.be.revertedWith('E13');
       await expect(
         vault.connect(user0).exercise(epoch, 3, 10, user0Address)
-      ).to.be.revertedWith("Invalid strike");
+      ).to.be.revertedWith('E15');
       await expect(
         vault.connect(user0).exercise(epoch, 1, 10, user0Address)
-      ).to.be.revertedWith("Strike is higher than current price");
+      ).to.be.revertedWith('E19');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
 
     // Exercise not past epoch
-    it("Exercise not past epoch", async () => {
+    it('Exercise not past epoch', async () => {
       const user0Address = await user0.getAddress();
       const epoch = await vault.currentEpoch();
 
       await expect(
         vault.connect(user0).exercise(epoch, 0, 1, user0Address)
-      ).to.be.revertedWith("Exercise epoch must be in the past");
+      ).to.be.revertedWith('E18');
 
       timeTravel(24 * 60 * 60 * 30);
 
       await expect(
         vault.connect(user0).exercise(epoch, 0, 1, user0Address)
-      ).to.be.revertedWith("Exercise epoch must be in the past");
+      ).to.be.revertedWith('E18');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
 
     // Exercise by user0
-    it("Exercise by user0", async () => {
+    it('Exercise by user0', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       const user0Address = await user0.getAddress();
@@ -737,7 +726,7 @@ describe("Vault test", async () => {
       await epochStrikeToken.connect(user0).approve(vault.address, amount);
       await expect(
         vault.connect(user0).exercise(epoch, 0, amount, user0Address)
-      ).to.emit(vault, "LogNewExercise");
+      ).to.emit(vault, 'LogNewExercise');
 
       // Current Data
       const currentEpochStrikeTokenBalanceOfUser =
@@ -776,7 +765,7 @@ describe("Vault test", async () => {
     });
 
     // Exercise by user1
-    it("Exercise by user1", async () => {
+    it('Exercise by user1', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       const user1Address = await user1.getAddress();
@@ -785,56 +774,56 @@ describe("Vault test", async () => {
 
       await expect(
         vault.connect(user1).exercise(epoch, 0, 1, user1Address)
-      ).to.be.revertedWith("Option token balance is not enough");
+      ).to.be.revertedWith('E21');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
   });
 
   // Withdraw For Strike
-  describe("Withdraw For Strike", async () => {
+  describe('Withdraw For Strike', async () => {
     // WithdrawForStrike Invalid Strike
-    it("WithdrawForStrike Invalid Strike", async () => {
+    it('WithdrawForStrike Invalid Strike', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       const epoch = (await vault.currentEpoch()).sub(1);
 
       await expect(
         vault.connect(user0).withdrawForStrike(epoch, 4)
-      ).to.be.revertedWith("Invalid strike index");
+      ).to.be.revertedWith('E13');
       await expect(
         vault.connect(user0).withdrawForStrike(epoch, 3)
-      ).to.be.revertedWith("Invalid strike");
+      ).to.be.revertedWith('E15');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
 
     // WithdrawForStrike not past epoch
-    it("WithdrawForStrike not past epoch", async () => {
+    it('WithdrawForStrike not past epoch', async () => {
       const epoch = await vault.currentEpoch();
 
       await expect(
         vault.connect(user0).withdrawForStrike(epoch, 0)
-      ).to.be.revertedWith("Withdraw epoch must be in the past");
+      ).to.be.revertedWith('E22');
 
       timeTravel(24 * 60 * 60 * 30);
 
       await expect(
         vault.connect(user0).withdrawForStrike(epoch, 0)
-      ).to.be.revertedWith("Withdraw epoch must be in the past");
+      ).to.be.revertedWith('E22');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
 
     // WithdrawForStrike by user0
-    it("WithdrawForStrike by user0", async () => {
+    it('WithdrawForStrike by user0', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       const user0Address = await user0.getAddress();
       const epoch = (await vault.currentEpoch()).sub(1);
       const strike = await vault.epochStrikes(epoch, 0);
       const userStrike = ethers.utils.solidityKeccak256(
-        ["address", "uint256"],
+        ['address', 'uint256'],
         [user0Address, strike]
       );
 
@@ -855,7 +844,7 @@ describe("Vault test", async () => {
       // Exercise
       await expect(vault.connect(user0).withdrawForStrike(epoch, 0)).to.emit(
         vault,
-        "LogNewWithdrawForStrike"
+        'LogNewWithdrawForStrike'
       );
 
       // Current Data
@@ -889,14 +878,14 @@ describe("Vault test", async () => {
     });
 
     // WithdrawForStrike by user1
-    it("WithdrawForStrike by user1", async () => {
+    it('WithdrawForStrike by user1', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       const user1Address = await user1.getAddress();
       const epoch = (await vault.currentEpoch()).sub(1);
       const strike = await vault.epochStrikes(epoch, 1);
       const userStrike = ethers.utils.solidityKeccak256(
-        ["address", "uint256"],
+        ['address', 'uint256'],
         [user1Address, strike]
       );
 
@@ -917,7 +906,7 @@ describe("Vault test", async () => {
       // Exercise
       await expect(vault.connect(user1).withdrawForStrike(epoch, 1)).to.emit(
         vault,
-        "LogNewWithdrawForStrike"
+        'LogNewWithdrawForStrike'
       );
 
       // Current Data
@@ -951,16 +940,14 @@ describe("Vault test", async () => {
     });
 
     // WithdrawForStrike by user2
-    it("WithdrawForStrike by user2", async () => {
+    it('WithdrawForStrike by user2', async () => {
       timeTravel(24 * 60 * 60 * 30);
 
       const epoch = (await vault.currentEpoch()).sub(1);
 
       await expect(
         vault.connect(user2).withdrawForStrike(epoch, 1)
-      ).to.be.revertedWith(
-        "User strike deposit amount must be greater than zero"
-      );
+      ).to.be.revertedWith('E23');
 
       timeTravel(-24 * 60 * 60 * 30);
     });
