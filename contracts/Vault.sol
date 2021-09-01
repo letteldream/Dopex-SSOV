@@ -172,7 +172,8 @@ contract Vault is Ownable {
         uint256 epoch,
         uint256 strike,
         address user,
-        uint256 amount
+        uint256 amount,
+        uint256 rdpxAmount
     );
 
     /*==== CONSTRUCTOR ====*/
@@ -536,6 +537,17 @@ contract Vault is Ownable {
         ];
         require(userStrikeDeposits > 0, 'E23');
 
+        // Transfer RDPX tokens to user
+        uint256 userRdpxAmount = totalEpochRdpxBalance[withdrawEpoch]
+            .mul(userStrikeDeposits)
+            .div(totalEpochStrikeDeposits[withdrawEpoch][strike]);
+        uint256 rdpxBalance = rdpx.balanceOf(address(this));
+        if (rdpxBalance < userRdpxAmount) {
+            userRdpxAmount = rdpxBalance;
+        }
+        totalEpochRdpxBalance[withdrawEpoch] -= userRdpxAmount;
+        rdpx.transfer(msg.sender, userRdpxAmount);
+
         // Transfer DPX tokens to user
         userEpochDeposits[withdrawEpoch][userStrike] = 0;
         totalEpochStrikeDeposits[withdrawEpoch][strike] -= userStrikeDeposits;
@@ -546,7 +558,8 @@ contract Vault is Ownable {
             withdrawEpoch,
             strike,
             msg.sender,
-            userStrikeDeposits
+            userStrikeDeposits,
+            userRdpxAmount
         );
 
         return true;
