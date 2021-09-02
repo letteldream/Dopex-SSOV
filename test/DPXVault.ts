@@ -20,6 +20,7 @@ import {
   dpx,
   dpxTokenAbi,
   rdpx,
+  rdpxTokenAbi,
   stakingRewards,
   stakingRewardsContractAbi,
 } from '../helper/data';
@@ -33,6 +34,7 @@ describe('Vault test', async () => {
   let user1: Signer;
   let user2: Signer;
   let dpxToken: Contract;
+  let rdpxToken: Contract;
   let stakingRewardsContract: Contract;
   let optionPricing: MockOptionPricing;
   let vault: Vault;
@@ -73,6 +75,9 @@ describe('Vault test', async () => {
 
     // DpxToken
     dpxToken = await ethers.getContractAt(dpxTokenAbi, dpx[chainId]);
+
+    // RdpxToken
+    rdpxToken = await ethers.getContractAt(rdpxTokenAbi, rdpx[chainId]);
 
     // StakingRewardsContract
     stakingRewardsContract = await ethers.getContractAt(
@@ -840,8 +845,20 @@ describe('Vault test', async () => {
       const pastDpxTokenBalanceOfVault = await dpxToken.balanceOf(
         vault.address
       );
+      const pastTotalEpochRdpxBalance = await vault.totalEpochRdpxBalance(
+        epoch
+      );
+      const pastRdpxTokenBalanceOfUser = await rdpxToken.balanceOf(
+        user0Address
+      );
+      const pastRdpxTokenBalanceOfVault = await rdpxToken.balanceOf(
+        vault.address
+      );
+      const userRdpxAmount = pastTotalEpochRdpxBalance
+        .mul(pastUserStrikeDeposits)
+        .div(pastTotalEpochStrikeDeposits);
 
-      // Exercise
+      // WithdrawForStrike
       await expect(vault.connect(user0).withdrawForStrike(epoch, 0)).to.emit(
         vault,
         'LogNewWithdrawForStrike'
@@ -874,6 +891,27 @@ describe('Vault test', async () => {
         pastDpxTokenBalanceOfVault.sub(pastUserStrikeDeposits)
       );
 
+      const currentTotalEpochRdpxBalance = await vault.totalEpochRdpxBalance(
+        epoch
+      );
+      expect(currentTotalEpochRdpxBalance).to.equal(
+        pastTotalEpochRdpxBalance.sub(userRdpxAmount)
+      );
+
+      const currentRdpxTokenBalanceOfUser = await rdpxToken.balanceOf(
+        user0Address
+      );
+      expect(currentRdpxTokenBalanceOfUser).to.equal(
+        pastRdpxTokenBalanceOfUser.add(userRdpxAmount)
+      );
+
+      const currentRdpxTokenBalanceOfVault = await rdpxToken.balanceOf(
+        vault.address
+      );
+      expect(currentRdpxTokenBalanceOfVault).to.equal(
+        pastRdpxTokenBalanceOfVault.sub(userRdpxAmount)
+      );
+
       timeTravel(-24 * 60 * 60 * 30);
     });
 
@@ -902,8 +940,20 @@ describe('Vault test', async () => {
       const pastDpxTokenBalanceOfVault = await dpxToken.balanceOf(
         vault.address
       );
+      const pastTotalEpochRdpxBalance = await vault.totalEpochRdpxBalance(
+        epoch
+      );
+      const pastRdpxTokenBalanceOfUser = await rdpxToken.balanceOf(
+        user1Address
+      );
+      const pastRdpxTokenBalanceOfVault = await rdpxToken.balanceOf(
+        vault.address
+      );
+      const userRdpxAmount = pastTotalEpochRdpxBalance
+        .mul(pastUserStrikeDeposits)
+        .div(pastTotalEpochStrikeDeposits);
 
-      // Exercise
+      // WithdrawForStrike
       await expect(vault.connect(user1).withdrawForStrike(epoch, 1)).to.emit(
         vault,
         'LogNewWithdrawForStrike'
@@ -934,6 +984,27 @@ describe('Vault test', async () => {
       );
       expect(currentDpxTokenBalanceOfVault).to.equal(
         pastDpxTokenBalanceOfVault.sub(pastUserStrikeDeposits)
+      );
+
+      const currentTotalEpochRdpxBalance = await vault.totalEpochRdpxBalance(
+        epoch
+      );
+      expect(currentTotalEpochRdpxBalance).to.equal(
+        pastTotalEpochRdpxBalance.sub(userRdpxAmount)
+      );
+
+      const currentRdpxTokenBalanceOfUser = await rdpxToken.balanceOf(
+        user1Address
+      );
+      expect(currentRdpxTokenBalanceOfUser).to.equal(
+        pastRdpxTokenBalanceOfUser.add(userRdpxAmount)
+      );
+
+      const currentRdpxTokenBalanceOfVault = await rdpxToken.balanceOf(
+        vault.address
+      );
+      expect(currentRdpxTokenBalanceOfVault).to.equal(
+        pastRdpxTokenBalanceOfVault.sub(userRdpxAmount)
       );
 
       timeTravel(-24 * 60 * 60 * 30);

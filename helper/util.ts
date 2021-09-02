@@ -59,3 +59,5 @@ export const unlockAccount = async (address: string) => {
   await hre.network.provider.send("hardhat_impersonateAccount", [address]);
   return address;
 }
+
+export const waitSeconds = (sec: number) => new Promise(resolve => setTimeout(resolve, sec * 1000));

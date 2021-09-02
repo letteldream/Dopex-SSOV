@@ -1,7 +1,7 @@
-import { DeployFunction } from 'hardhat-deploy/types'
 import { HardhatRuntimeEnvironment } from 'hardhat/types'
-import { chainIdToNetwork, dpx, rdpx, stakingRewards } from '../helper/data'
 import { BigNumber } from 'ethers'
+import { chainIdToNetwork, dpx, rdpx, stakingRewards } from '../helper/data'
+import { waitSeconds } from '../helper/util'
 
 const deploy = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts, getChainId, ethers } = hre
@@ -80,6 +80,7 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
   })
 
   // Verify
+  await waitSeconds(10);
   await hre.run('verify:verify', {
     address: mockDPXChainlinkUSDAdapter.address,
   })
