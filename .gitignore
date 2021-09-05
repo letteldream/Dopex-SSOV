@@ -12,3 +12,6 @@ deployments
 
 # vscode settings
 .vscode
+
+# playground
+playground.ts

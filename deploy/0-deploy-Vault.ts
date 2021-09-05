@@ -1,18 +1,19 @@
-import { HardhatRuntimeEnvironment } from 'hardhat/types'
-import { BigNumber } from 'ethers'
-import { chainIdToNetwork, dpx, rdpx, stakingRewards } from '../helper/data'
-import { waitSeconds } from '../helper/util'
+import { HardhatRuntimeEnvironment } from 'hardhat/types';
+import { BigNumber } from 'ethers';
+
+import { chainIdToNetwork, dpx, rdpx, stakingRewards } from '../helper/data';
+import { waitSeconds } from '../helper/util';
 
 const deploy = async function (hre: HardhatRuntimeEnvironment) {
-  const { deployments, getNamedAccounts, getChainId, ethers } = hre
-  const { deployer } = await getNamedAccounts()
-  const chainId = parseInt(await getChainId())
-  const network = chainIdToNetwork[chainId]
-  const dpxAddress = dpx[chainId]
-  const rdpxAddress = rdpx[chainId]
-  const stakingRewardsAddress = stakingRewards[chainId]
+  const { deployments, getNamedAccounts, getChainId, ethers } = hre;
+  const { deployer } = await getNamedAccounts();
+  const chainId = parseInt(await getChainId());
+  const network = chainIdToNetwork[chainId];
+  const dpxAddress = dpx[chainId];
+  const rdpxAddress = rdpx[chainId];
+  const stakingRewardsAddress = stakingRewards[chainId];
 
-  if (!network || !dpxAddress || !rdpxAddress || !stakingRewardsAddress) return
+  if (!network || !dpxAddress || !rdpxAddress || !stakingRewardsAddress) return;
 
   // Deploy MockDPXChainlinkUSDAdapter
   const mockDPXChainlinkUSDAdapter = await deployments.deploy(
@@ -20,32 +21,29 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
     {
       from: deployer,
       args: [],
-      // libraries: {},
       log: true,
     }
-  )
+  );
 
   // Deploy PriceOracleAggregator
   const { address } = await deployments.deploy('PriceOracleAggregator', {
     from: deployer,
     args: [deployer],
-    // libraries: {},
     log: true,
-  })
+  });
 
   const priceOracleAggregator = await ethers.getContractAt(
     'PriceOracleAggregator',
     address
-  )
+  );
   await priceOracleAggregator.updateOracleForAsset(
     dpxAddress,
     mockDPXChainlinkUSDAdapter.address
-  )
+  );
 
   // Deploy OptionPricing
   const optionPricing = await deployments.deploy('OptionPricing', {
     from: deployer,
-    // libraries: {},
     args: [
       BigNumber.from(500).toString(),
       BigNumber.from(10).pow(8).toString(),
@@ -54,15 +52,14 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
       BigNumber.from(9).pow(8).div(1000).toString(),
     ],
     log: true,
-  })
+  });
 
   // Deploy IvOracle
   const ivOracle = await deployments.deploy('IvOracle', {
     from: deployer,
     args: [],
-    // libraries: {},
     log: true,
-  })
+  });
 
   // Deploy Vault
   const vault = await deployments.deploy('Vault', {
@@ -75,19 +72,18 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
       priceOracleAggregator.address,
       ivOracle.address,
     ],
-    // libraries: {},
     log: true,
-  })
+  });
 
   // Verify
   await waitSeconds(10);
   await hre.run('verify:verify', {
     address: mockDPXChainlinkUSDAdapter.address,
-  })
+  });
   await hre.run('verify:verify', {
     address: priceOracleAggregator.address,
     constructorArguments: [deployer],
-  })
+  });
   await hre.run('verify:verify', {
     address: optionPricing.address,
     constructorArguments: [
@@ -97,10 +93,10 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
       BigNumber.from(9).pow(8).div(1000).toString(),
       BigNumber.from(9).pow(8).div(1000).toString(),
     ],
-  })
+  });
   await hre.run('verify:verify', {
     address: ivOracle.address,
-  })
+  });
   await hre.run('verify:verify', {
     address: vault.address,
     constructorArguments: [
@@ -111,8 +107,8 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
       priceOracleAggregator.address,
       ivOracle.address,
     ],
-  })
-}
+  });
+};
 
-deploy.tags = ['Vault']
-export default deploy
+deploy.tags = ['Vault'];
+export default deploy;
