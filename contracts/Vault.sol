@@ -32,16 +32,15 @@ pragma solidity ^0.8.0;
 */
 
 // Libraries
-import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
-import {ERC20PresetMinterPauser} from '@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol';
 import {Strings} from '@openzeppelin/contracts/utils/Strings.sol';
 import {SafeMath} from '@openzeppelin/contracts/utils/math/SafeMath.sol';
-
 import {BokkyPooBahsDateTimeLibrary} from './libraries/BokkyPooBahsDateTimeLibrary.sol';
 import {SafeERC20} from './libraries/SafeERC20.sol';
 
 // Contracts
 import {IvOracle} from './oracle/IvOracle.sol';
+import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
+import {ERC20PresetMinterPauser} from '@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol';
 
 // Interfaces
 import {IERC20} from './interfaces/IERC20.sol';
@@ -323,7 +322,7 @@ contract Vault is Ownable {
         bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
 
         // Transfer DPX from user to vault
-        dpx.transferFrom(msg.sender, address(this), amount);
+        dpx.safeTransferFrom(msg.sender, address(this), amount);
 
         // Add to user epoch deposits
         userEpochDeposits[nextEpoch][userStrike] += amount;
@@ -332,7 +331,7 @@ contract Vault is Ownable {
         // Add to total epoch deposits
         totalEpochDeposits[nextEpoch] += amount;
         // Deposit into staking rewards
-        dpx.approve(address(stakingRewards), amount);
+        dpx.safeApprove(address(stakingRewards), amount);
         stakingRewards.stake(amount);
 
         emit LogNewDeposit(nextEpoch, strike, msg.sender);
@@ -390,7 +389,7 @@ contract Vault is Ownable {
         );
 
         // Transfer doTokens to user
-        IERC20(epochStrikeTokens[currentEpoch][strike]).transfer(
+        IERC20(epochStrikeTokens[currentEpoch][strike]).safeTransfer(
             msg.sender,
             amount
         );
@@ -407,7 +406,7 @@ contract Vault is Ownable {
             .mul(amount)
             .div(getUsdPrice(address(dpx)));
         // Transfer usd equivalent to premium from user
-        dpx.transferFrom(msg.sender, address(this), premium);
+        dpx.safeTransferFrom(msg.sender, address(this), premium);
 
         // Add to total epoch calls purchased
         totalEpochCallsPurchased[currentEpoch][strike] += amount;
@@ -546,13 +545,13 @@ contract Vault is Ownable {
             userRdpxAmount = rdpxBalance;
         }
         totalEpochRdpxBalance[withdrawEpoch] -= userRdpxAmount;
-        rdpx.transfer(msg.sender, userRdpxAmount);
+        rdpx.safeTransfer(msg.sender, userRdpxAmount);
 
         // Transfer DPX tokens to user
         userEpochDeposits[withdrawEpoch][userStrike] = 0;
         totalEpochStrikeDeposits[withdrawEpoch][strike] -= userStrikeDeposits;
 
-        dpx.transfer(msg.sender, userStrikeDeposits);
+        dpx.safeTransfer(msg.sender, userStrikeDeposits);
 
         emit LogNewWithdrawForStrike(
             withdrawEpoch,
