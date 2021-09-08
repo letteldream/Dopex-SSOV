@@ -3,8 +3,9 @@ import '@nomiclabs/hardhat-waffle';
 import '@nomiclabs/hardhat-etherscan';
 import '@typechain/hardhat';
 import 'hardhat-contract-sizer';
-import 'solidity-coverage';
 import 'hardhat-deploy';
+import 'hardhat-gas-reporter';
+import 'solidity-coverage';
 
 require('dotenv').config();
 
@@ -52,6 +53,9 @@ export default {
     deploy: 'deploy',
     deployments: 'deployments',
     imports: 'imports',
+  },
+  mocha: {
+    timeout: 200000,
   },
   ...(process.env.ETHERSCAN_API_KEY && {
     etherscan: {

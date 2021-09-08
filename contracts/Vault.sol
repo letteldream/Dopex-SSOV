@@ -34,13 +34,14 @@ pragma solidity ^0.8.0;
 // Libraries
 import {Strings} from '@openzeppelin/contracts/utils/Strings.sol';
 import {SafeMath} from '@openzeppelin/contracts/utils/math/SafeMath.sol';
+import {Clones} from '@openzeppelin/contracts/proxy/Clones.sol';
 import {BokkyPooBahsDateTimeLibrary} from './libraries/BokkyPooBahsDateTimeLibrary.sol';
 import {SafeERC20} from './libraries/SafeERC20.sol';
 
 // Contracts
 import {IvOracle} from './oracle/IvOracle.sol';
 import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
-import {ERC20PresetMinterPauser} from '@openzeppelin/contracts/token/ERC20/presets/ERC20PresetMinterPauser.sol';
+import {ERC20PresetMinterPauserUpgradeable} from '@openzeppelin/contracts-upgradeable/token/ERC20/presets/ERC20PresetMinterPauserUpgradeable.sol';
 
 // Interfaces
 import {IERC20} from './interfaces/IERC20.sol';
@@ -65,6 +66,9 @@ contract Vault is Ownable {
 
     /// @dev Option pricing provider
     IOptionPricing public optionPricing;
+
+    /// @dev ERC20PresetMinterPauserUpgradeable implementation address
+    address public immutable erc20Implementation;
 
     /// @dev ivOracle address
     address public ivOracleAddress;
@@ -196,6 +200,7 @@ contract Vault is Ownable {
         stakingRewards = IStakingRewards(_stakingRewards);
         optionPricing = IOptionPricing(_optionPricing);
         priceOracleAggregator = IPriceOracleAggregator(_priceOracleAggregator);
+        erc20Implementation = address(new ERC20PresetMinterPauserUpgradeable());
         ivOracleAddress = _ivOracleAddress;
     }
 
@@ -246,10 +251,10 @@ contract Vault is Ownable {
             name = concatenate(name, '-EPOCH-');
             name = concatenate(name, (nextEpoch).toString());
             // Create doTokens representing calls for selected strike in epoch
-            ERC20PresetMinterPauser _erc20 = new ERC20PresetMinterPauser(
-                name,
-                name
-            );
+            ERC20PresetMinterPauserUpgradeable _erc20 = ERC20PresetMinterPauserUpgradeable(
+                    Clones.clone(erc20Implementation)
+                );
+            _erc20.initialize(name, name);
             epochStrikeTokens[nextEpoch][strike] = address(_erc20);
             // Mint tokens equivalent to deposits for strike in epoch
             _erc20.mint(
@@ -468,8 +473,9 @@ contract Vault is Ownable {
         uint256 PnL = ((currentPrice - strike) * amount) / currentPrice;
 
         // Burn user option tokens
-        ERC20PresetMinterPauser(epochStrikeTokens[exerciseEpoch][strike])
-            .burnFrom(user, amount);
+        ERC20PresetMinterPauserUpgradeable(
+            epochStrikeTokens[exerciseEpoch][strike]
+        ).burnFrom(user, amount);
 
         // Update state to account for exercised options (amount of DPX used in exercising)
         totalTokenVaultExercises[exerciseEpoch] += PnL;
