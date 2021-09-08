@@ -18,6 +18,9 @@ export default {
       },
     },
   },
+  namedAccounts: {
+    deployer: 0,
+  },
   contractSizer: {
     alphaSort: true,
     disambiguatePaths: false,

@@ -36,6 +36,7 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
     'PriceOracleAggregator',
     address
   );
+
   await priceOracleAggregator.updateOracleForAsset(
     dpxAddress,
     mockDPXChainlinkUSDAdapter.address

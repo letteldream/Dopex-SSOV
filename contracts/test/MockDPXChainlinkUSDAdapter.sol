@@ -1,14 +1,23 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { IOracle } from "../interfaces/IOracle.sol";
+import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
 
-contract MockDPXChainlinkUSDAdapter is IOracle {
-  function getPriceInUSD() external pure override returns (uint256 price) {
-    return 100e8; // 100$
-  }
+import {IOracle} from '../interfaces/IOracle.sol';
 
-  function viewPriceInUSD() external pure override returns (uint256 price) {
-    return 100e8; // 100$
-  }
+contract MockDPXChainlinkUSDAdapter is IOracle, Ownable {
+    uint256 public price = 100e8;
+
+    function updatePrice(uint256 _price) external onlyOwner returns (bool) {
+        price = _price;
+        return true;
+    }
+
+    function getPriceInUSD() external view override returns (uint256) {
+        return price;
+    }
+
+    function viewPriceInUSD() external view override returns (uint256) {
+        return price;
+    }
 }
