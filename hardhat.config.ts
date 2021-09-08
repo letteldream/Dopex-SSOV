@@ -1,6 +1,5 @@
 import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-waffle';
-import '@nomiclabs/hardhat-etherscan';
 import '@typechain/hardhat';
 import 'hardhat-contract-sizer';
 import 'hardhat-deploy';
@@ -57,9 +56,4 @@ export default {
   mocha: {
     timeout: 200000,
   },
-  ...(process.env.ETHERSCAN_API_KEY && {
-    etherscan: {
-      apiKey: process.env.ETHERSCAN_API_KEY,
-    },
-  }),
 };

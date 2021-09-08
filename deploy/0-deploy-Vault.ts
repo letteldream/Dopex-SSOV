@@ -2,7 +2,6 @@ import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import { BigNumber } from 'ethers';
 
 import { chainIdToNetwork, dpx, rdpx, stakingRewards } from '../helper/data';
-import { waitSeconds } from '../helper/util';
 
 const deploy = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts, getChainId, ethers } = hre;
@@ -74,40 +73,6 @@ const deploy = async function (hre: HardhatRuntimeEnvironment) {
       ivOracle.address,
     ],
     log: true,
-  });
-
-  // Verify
-  await waitSeconds(10);
-  await hre.run('verify:verify', {
-    address: mockDPXChainlinkUSDAdapter.address,
-  });
-  await hre.run('verify:verify', {
-    address: priceOracleAggregator.address,
-    constructorArguments: [deployer],
-  });
-  await hre.run('verify:verify', {
-    address: optionPricing.address,
-    constructorArguments: [
-      BigNumber.from(500).toString(),
-      BigNumber.from(10).pow(8).toString(),
-      BigNumber.from(10).pow(8).toString(),
-      BigNumber.from(9).pow(8).div(1000).toString(),
-      BigNumber.from(9).pow(8).div(1000).toString(),
-    ],
-  });
-  await hre.run('verify:verify', {
-    address: ivOracle.address,
-  });
-  await hre.run('verify:verify', {
-    address: vault.address,
-    constructorArguments: [
-      dpxAddress,
-      rdpxAddress,
-      stakingRewardsAddress,
-      optionPricing.address,
-      priceOracleAggregator.address,
-      ivOracle.address,
-    ],
   });
 };
 
