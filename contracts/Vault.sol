@@ -384,20 +384,7 @@ contract Vault is Ownable {
         // Must be a valid strike
         uint256 strike = epochStrikes[currentEpoch][strikeIndex];
         require(strike != 0, 'E15');
-
-        // Must deposit enough by user
         bytes32 userStrike = keccak256(abi.encodePacked(msg.sender, strike));
-        require(
-            userEpochCallsPurchased[currentEpoch][userStrike] + amount <=
-                userEpochDeposits[currentEpoch][userStrike],
-            'E17'
-        );
-
-        // Transfer doTokens to user
-        IERC20(epochStrikeTokens[currentEpoch][strike]).safeTransfer(
-            msg.sender,
-            amount
-        );
 
         // Get total premium for all calls being purchased
         uint256 premium = optionPricing
@@ -412,6 +399,12 @@ contract Vault is Ownable {
             .div(getUsdPrice(address(dpx)));
         // Transfer usd equivalent to premium from user
         dpx.safeTransferFrom(msg.sender, address(this), premium);
+
+        // Transfer doTokens to user
+        IERC20(epochStrikeTokens[currentEpoch][strike]).transfer(
+            msg.sender,
+            amount
+        );
 
         // Add to total epoch calls purchased
         totalEpochCallsPurchased[currentEpoch][strike] += amount;
